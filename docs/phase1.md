@@ -1,6 +1,6 @@
 # Claude 管制室 フェーズ1 実装指示書（Claude Code 向け）
 
-作成日：2026-10-06
+作成日：2026-10-06（同日、実環境との差異を反映）
 
 この指示書は Claude Code に渡して使います。Claude Code は、まずこの指示書と参考資料を読み、実装計画を提示して承認を得てから作業を始めてください。
 
@@ -27,7 +27,7 @@
 | クライアント | 会社の Windows PC（複数台）と macOS の端末。会社 PC は会社の Tailscale に参加し、Mac Mini はマシン共有で見えている |
 | 公開ポート | ダッシュボードは 8443 番（`tailscale serve` で HTTPS 公開）。会社アカウントから許可されているのは 8443 番のみ |
 | 使用中のポート | 443 番は既存のウェブアプリが `tailscale serve` で使用中。触らないこと |
-| アプリの待ち受け | サーバーは localhost の 8787 番（仮）で待ち受け、`tailscale serve` で 8443 番へ中継する |
+| アプリの待ち受け | サーバーは 127.0.0.1 の 8790 番で待ち受け、`tailscale serve` で 8443 番へ中継する（当初案の 8787 番は既存サービスが使用中のため変更） |
 | 認証 | Claude Code は claude.ai の Team プランでログイン済み。Remote Control は有効 |
 
 Mac Mini 上の作業は、別のPCの Claude Code から SSH 経由で行う場合があります。
@@ -51,7 +51,7 @@ PreToolUse フックは、フェーズ1では記録のみ行い、実行を止�
 TypeScript のモノレポとし、サーバー・画面・PC 側エージェントで型定義を共有します。ランタイムとパッケージ管理は Bun に統一します。
 
 ```text
-kanseishitsu/
+claude-dashboard/    # リポジトリのルート（当初案の名称は kanseishitsu/）
 ├─ packages/
 │  └─ shared/        # イベント・状態の型定義、状態判定の共通ロジック
 ├─ apps/
@@ -70,7 +70,7 @@ kanseishitsu/
 | --- | --- | --- |
 | サーバー | Bun ＋ Hono ＋ bun:sqlite | SQLite は WAL モード。画面のビルド成果物もサーバーから配信する |
 | 画面 | React ＋ TypeScript ＋ Vite | グラフ等のライブラリは入れず、表示灯は手書き SVG |
-| エージェント | TypeScript を Bun で単一実行ファイル化 | Windows（x64）と macOS（arm64）向けにビルド |
+| エージェント | TypeScript を Bun で単一実行ファイル化 | Windows（x64）と macOS（arm64）向けにビルド。Bun 1.3.13 の出力は macOS 27 で起動できないため、ビルドにはリポジトリ内の Bun 1.4.2 を使う |
 | DB マイグレーション | SQL ファイルを連番で管理 | 起動時に未適用分を実行 |
 
 ## サーバー仕様
@@ -146,7 +146,7 @@ players、alerts、outbox など後のフェーズのテーブルは、フェー
 
 ### Claude Code への登録
 
-ユーザー設定（`~/.claude/settings.json`）の hooks と statusLine にエージェントを登録します。対象イベントは SessionStart、UserPromptSubmit、PreToolUse、PostToolUse、Notification、Stop、SubagentStop、SessionEnd です。
+ユーザー設定（`~/.claude/settings.json`）の hooks と statusLine にエージェントを登録します。対象イベントは SessionStart、UserPromptSubmit、PreToolUse、PostToolUse、Notification、Stop、SubagentStop、SessionEnd です。状態判定の精度を上げるため、公式ドキュメントで存在を確認した PostToolUseFailure、PermissionRequest（許可待ち）、StopFailure（API エラー）も登録します。すべて `async: true` で登録し、Claude Code を待たせません。
 
 設定の書式と、各イベントで渡される JSON の項目名は、実装前に必ず公式ドキュメントで確認してください。この指示書では項目名を決め打ちしていません。既存の `~/.claude/settings.json` に他の設定がある場合は、上書きせずに追記してください。
 
@@ -178,14 +178,14 @@ players、alerts、outbox など後のフェーズのテーブルは、フェー
 
 ### 公開と常駐
 
-- サーバーは localhost の 8787 番（仮）だけで待ち受け、外部のインターフェースには直接公開しません。
-- `tailscale serve` で HTTPS の 8443 番から 8787 番へ中継します。443 番の既存の serve 設定には触れず、8443 番の設定だけを追加してください。
+- サーバーは 127.0.0.1 の 8790 番だけで待ち受け、外部のインターフェースには直接公開しません。
+- `tailscale serve` で HTTPS の 8443 番から 8790 番へ中継します。443 番の既存の serve 設定には触れず、8443 番の設定だけを追加してください。
 - launchd で常駐させ、Mac Mini の再起動後も自動で起動するようにします。
 
 ### セキュリティ
 
 - API トークンは PC ごとに発行し、サーバーにはハッシュ値だけを保存します。
-- 画面へのアクセスにもログインを設けます。方式はフェーズ1では簡易なもので構いませんが、案を提示して承認を得てください。
+- 画面へのアクセスにもログインを設けます。フェーズ1は、パスワード（Bun.password でハッシュ化して保存）と、署名付き Cookie（HttpOnly・Secure・SameSite=Strict、30日）の方式とします。連続5回失敗すると5分間ログインを拒否します。
 - SQLite のデータベースファイルと設定ファイルは、リポジトリにコミットしないでください。
 
 ### 作業ルール（必ず守ること）

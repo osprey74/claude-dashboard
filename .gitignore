@@ -8,3 +8,5 @@ dist/
 config.local.json
 apps/agent/bin/
 .DS_Store
+# 環境固有のメモ
+deploy/macos/local.md
