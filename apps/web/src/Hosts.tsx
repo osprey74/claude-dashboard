@@ -88,7 +88,13 @@ function HostCard({
   collapsed,
   onToggle,
 }: { host: HostView; collapsed: boolean; onToggle: () => void } & Omit<Props, "hosts">) {
-  const sub = [host.os, host.hostname !== host.label ? host.hostname : null].filter(Boolean).join(" ・ ");
+  const sub = [
+    host.os,
+    host.hostname !== host.label ? host.hostname : null,
+    host.agentVersion ? `エージェント v${host.agentVersion}` : null,
+  ]
+    .filter(Boolean)
+    .join(" ・ ");
   // トークンを発行しただけで、まだ一度もデータが届いていない PC
   if (!host.lastSeenAt) {
     return (
@@ -135,9 +141,7 @@ function HostCard({
           </svg>
           <PcIcon />
           <div>
-            <div className="host-name mono" title={host.agentVersion ? `エージェント v${host.agentVersion}` : undefined}>
-              {host.label}
-            </div>
+            <div className="host-name mono">{host.label}</div>
             <div className="host-sub">
               {sub || "未受信"}
               {!host.agentVersion && <span className="old-agent"> ・ エージェントが旧版です</span>}
