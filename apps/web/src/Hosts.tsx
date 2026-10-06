@@ -88,13 +88,7 @@ function HostCard({
   collapsed,
   onToggle,
 }: { host: HostView; collapsed: boolean; onToggle: () => void } & Omit<Props, "hosts">) {
-  const sub = [
-    host.os,
-    host.hostname !== host.label ? host.hostname : null,
-    host.agentVersion ? `エージェント v${host.agentVersion}` : null,
-  ]
-    .filter(Boolean)
-    .join(" ・ ");
+  const sub = [host.os, host.hostname !== host.label ? host.hostname : null].filter(Boolean).join(" ・ ");
   // トークンを発行しただけで、まだ一度もデータが届いていない PC
   if (!host.lastSeenAt) {
     return (
@@ -148,7 +142,15 @@ function HostCard({
             </div>
           </div>
         </div>
-        <span className="host-beat">最終イベント {ago(host.lastSeenAt, now)}</span>
+        <span className="host-beat">
+          最終イベント {ago(host.lastSeenAt, now)}
+          {host.agentVersion && (
+            <>
+              <br />
+              エージェント v{host.agentVersion}
+            </>
+          )}
+        </span>
       </div>
       {collapsed ? (
         <SessionSummary sessions={host.sessions} />
