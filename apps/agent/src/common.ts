@@ -129,3 +129,39 @@ export function remoteSessionId(sessionId: unknown): string | null | undefined {
   }
   return undefined;
 }
+
+/**
+ * この PC で動いているセッションの ID。~/.claude/sessions/<pid>.json のうち、プロセスが生きているものを集める。
+ * SessionEnd が届かずに終わったセッション（ウィンドウを閉じた・電源を切った）をサーバー側で終了にするために使う。
+ * sessions ディレクトリがなければ undefined（判断材料なし）
+ */
+export function liveSessionIds(): string[] | undefined {
+  const dir = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "sessions");
+  let files: string[];
+  try {
+    files = readdirSync(dir).filter((f) => /^\d+\.json$/.test(f)).slice(0, 64);
+  } catch {
+    return undefined;
+  }
+  const out: string[] = [];
+  for (const f of files) {
+    try {
+      const s = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>;
+      const pid = typeof s.pid === "number" ? s.pid : Number(f.slice(0, -5));
+      if (typeof s.sessionId === "string" && s.sessionId && isAlive(pid)) out.push(s.sessionId);
+    } catch {
+      // 書き込み途中のファイルなどは飛ばす
+    }
+  }
+  return out;
+}
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // 権限がないだけならプロセスはある
+    return (e as NodeJS.ErrnoException).code === "EPERM";
+  }
+}

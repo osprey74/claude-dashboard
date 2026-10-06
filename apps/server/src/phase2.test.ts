@@ -196,3 +196,43 @@ describe("バックグラウンドの作業の終了の知らせ", () => {
     expect(players()).toEqual([]);
   });
 });
+
+describe("SessionEnd が届かなかったセッション", () => {
+  function setupAt() {
+    const db = openDb(":memory:");
+    const { hostId } = issueHostToken(db, "home-desktop");
+    const host = { host_id: hostId, label: "home-desktop" };
+    const send = (at: string, sessionId: string, event: string, payload: Record<string, unknown> = {}) =>
+      processHook(
+        db,
+        host,
+        { event, host: { hostname: "PC", os: "Windows 11" }, payload: { session_id: sessionId, cwd: "G:\\novel", ...payload }, sentAt: "" },
+        new Date(at),
+      );
+    const open = (at: string) =>
+      buildSnapshot(db, cfg, new Date(at)).hosts[0]!.sessions.map((s) => s.sessionId);
+    return { send, open };
+  }
+
+  test("同じ PC の次のイベントで、動いていないセッションを終了にする", () => {
+    const { send, open } = setupAt();
+    send("2026-10-06T13:00:00Z", "old", "Stop", { live_session_ids: ["old"] });
+    send("2026-10-06T14:10:00Z", "new", "SessionStart", { source: "startup", live_session_ids: ["new"] });
+    expect(open("2026-10-06T14:10:01Z")).toEqual(["new"]);
+  });
+
+  test("一覧に送り元自身がない・一覧がないときは何もしない", () => {
+    const { send, open } = setupAt();
+    send("2026-10-06T13:00:00Z", "old", "Stop");
+    send("2026-10-06T14:10:00Z", "new", "SessionStart", { source: "startup", live_session_ids: [] });
+    send("2026-10-06T14:11:00Z", "new", "Stop");
+    expect(open("2026-10-06T14:11:01Z").sort()).toEqual(["new", "old"]);
+  });
+
+  test("起動直後（2分以内）のセッションは一覧になくても残す", () => {
+    const { send, open } = setupAt();
+    send("2026-10-06T14:09:30Z", "other", "SessionStart", { source: "startup" });
+    send("2026-10-06T14:10:00Z", "new", "SessionStart", { source: "startup", live_session_ids: ["new"] });
+    expect(open("2026-10-06T14:10:01Z").sort()).toEqual(["new", "other"]);
+  });
+});

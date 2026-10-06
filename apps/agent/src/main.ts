@@ -5,7 +5,7 @@
 //   kanseishitsu-agent setup [--apply]     設定と Claude Code への登録
 
 import { guardCheck, redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishitsu/shared";
-import { hostInfo, loadConfig, log, post, readStdinJson, remoteSessionId, truncateDeep } from "./common";
+import { hostInfo, liveSessionIds, loadConfig, log, post, readStdinJson, remoteSessionId, truncateDeep } from "./common";
 import { setup } from "./setup";
 import { statuslinePayload, statusText } from "./statusline";
 import { modelFromTranscript } from "./transcript";
@@ -37,6 +37,11 @@ async function runHook(event: string): Promise<void> {
   // Remote Control の URL 用。セッションの記録が見つからないときは送らない（サーバー側の値を消さない）
   const remote = remoteSessionId(payload.session_id);
   if (remote !== undefined) payload.remote_session_id = remote;
+  // 同じ PC で動いているセッションの一覧。SessionEnd が届かなかったセッションをサーバー側で終了にする
+  if (event !== "SessionEnd") {
+    const live = liveSessionIds();
+    if (live) payload.live_session_ids = live;
+  }
   const body: HookIngest = {
     event: event || String(payload.hook_event_name ?? "unknown"),
     host: hostInfo(cfg),

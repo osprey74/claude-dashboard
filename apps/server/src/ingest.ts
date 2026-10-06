@@ -88,6 +88,7 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
       updateSession(db, host, sessionId, existing, change, cwd, model, at);
     }
     recordRemote(db, sessionId, payload);
+    closeVanished(db, host.host_id, sessionId, payload.live_session_ids, now);
     trackDetails(db, sessionId, event, payload, at);
     if (event === "PostToolUse") recordTouch(db, host.host_id, sessionId, payload, at);
     if (event === "GuardHit") recordDanger(db, host.host_id, sessionId, payload, at);
@@ -95,6 +96,34 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
     if (buckets) recordTranscriptCosts(db, host.host_id, sessionId, buckets, now);
     else trackDangerOutcome(db, sessionId, event, str(payload.tool_use_id), at);
   })();
+}
+
+/** プロセスがなくなったとみなすまでの猶予（起動直後で記録ファイルがまだない場合など） */
+const VANISH_GRACE_MS = 2 * 60_000;
+
+/**
+ * SessionEnd が届かないまま終わったセッション（ウィンドウを閉じた・電源を切った）を終了にする。
+ * エージェントが送る「この PC で動いているセッションの一覧」にないものが対象。
+ * 一覧に送り元のセッション自身が含まれるときだけ使う（その PC・起動方法で一覧が正しく取れている印）
+ */
+function closeVanished(db: Database, hostId: string, sessionId: string, live: unknown, now: Date): void {
+  if (!Array.isArray(live) || !live.includes(sessionId)) return;
+  const alive = new Set(live.filter((v): v is string => typeof v === "string"));
+  const before = new Date(now.getTime() - VANISH_GRACE_MS).toISOString();
+  const at = now.toISOString();
+  const stale = db
+    .query<{ session_id: string }, [string, string]>(
+      "SELECT session_id FROM sessions WHERE host_id = ? AND ended_at IS NULL AND last_event_at < ?",
+    )
+    .all(hostId, before)
+    .filter((r) => !alive.has(r.session_id));
+  for (const r of stale) {
+    db.query("UPDATE sessions SET status = 'ended', status_text = '終了（プロセスなし）', ended_at = ? WHERE session_id = ?").run(
+      at,
+      r.session_id,
+    );
+    db.query("UPDATE players SET status = 'done', ended_at = ? WHERE session_id = ? AND status = 'run'").run(at, r.session_id);
+  }
 }
 
 function updateSession(
