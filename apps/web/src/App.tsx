@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { SessionView, StateSnapshot } from "@kanseishitsu/shared";
+import { AlertList } from "./Alerts";
 import { DetailPanel } from "./Detail";
 import { History } from "./History";
 import { HostGrid } from "./Hosts";
@@ -63,6 +64,9 @@ export function App() {
   const warnPct = state?.ui?.ctxWarnPct ?? 70;
   const selectedSession = findSession(state, route.selected);
   const version = state?.generatedAt ?? "";
+  const alerts = (
+    <AlertList alerts={state?.alerts ?? []} now={now} idleMin={state?.ui?.idleAlertMin ?? 10} onSelect={route.select} />
+  );
 
   const hosts = !state ? (
     <p className="empty">読み込み中…</p>
@@ -85,7 +89,10 @@ export function App() {
           ) : route.tab === "history" ? (
             <History version={version} onSelect={route.select} />
           ) : (
-            hosts
+            <>
+              {alerts}
+              {hosts}
+            </>
           )}
           <Footer />
         </div>
@@ -113,6 +120,7 @@ export function App() {
       <div className="container">
         <Header state={state} conn={conn} updatedAt={updatedAt} />
         <UsageRow usage={state?.usage ?? []} now={now} />
+        {alerts}
         <div className="main-row">
           <div className="main-col">
             <section className="hosts-section" aria-label="PCとセッション">

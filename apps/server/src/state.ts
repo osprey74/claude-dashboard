@@ -13,6 +13,7 @@ import {
   type StateSnapshot,
   type UsageView,
 } from "@kanseishitsu/shared";
+import { openAlerts } from "./alerts";
 import type { ServerConfig } from "./config";
 
 interface HostRow {
@@ -174,10 +175,11 @@ export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date())
 
   return {
     generatedAt: now.toISOString(),
-    ui: { ctxWarnPct: cfg.thresholds.ctxWarnPct },
+    ui: { ctxWarnPct: cfg.thresholds.ctxWarnPct, idleAlertMin: Math.round(cfg.thresholds.idleAlertSec / 60) },
     hosts: [...byHost.values()],
     counts,
     usage,
+    alerts: openAlerts(db),
   };
 }
 

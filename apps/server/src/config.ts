@@ -16,6 +16,10 @@ export interface ServerConfig {
     hideIdleAfterSec: number;
     /** コンテキスト使用率がこの値（%）以上で「圧縮間近」として黄色で表示する */
     ctxWarnPct: number;
+    /** 許可待ち・質問への回答待ちがこの秒数続いたら放置アラートを出す */
+    idleAlertSec: number;
+    /** 同じファイルをこの秒数以内に別の担当が編集したら競合とみなす */
+    conflictWindowSec: number;
   };
   /** 画面ログイン用。Bun.password のハッシュ。未設定ならログインできない */
   passwordHash: string | null;
@@ -33,7 +37,7 @@ export const DB_PATH = join(DATA_DIR, "kanseishitsu.db");
 const DEFAULTS: Omit<ServerConfig, "sessionSecret"> = {
   host: "127.0.0.1",
   port: 8790,
-  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70 },
+  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
   passwordHash: null,
   sessionDays: 30,
 };

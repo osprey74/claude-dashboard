@@ -244,3 +244,25 @@ h1, h2 { margin: 0; }
   }
   .bottom-nav button.active { color: var(--accent); }
 }
+
+/* アラート欄 */
+.alerts { padding: 14px 20px; display: flex; flex-direction: column; gap: 10px; }
+.alerts-head { display: flex; align-items: center; gap: 8px; }
+.alerts-head h2 { margin: 0; font-size: 15px; font-weight: 700; }
+.alerts-count { font-size: 12px; font-weight: 700; color: var(--bg); background: var(--wait); border-radius: 999px; padding: 1px 8px; }
+.alert-row { display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding-top: 10px; border-top: 1px solid var(--line); font-size: 13px; }
+.alert-title { font-weight: 700; color: #f8dc92; white-space: nowrap; }
+.alert-msg { color: var(--sub2); min-width: 0; overflow-wrap: anywhere; }
+.alert-msg code { font-size: 12px; color: var(--text); }
+.alert-em { color: var(--wait); font-weight: 700; }
+.alert-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.alert-btn { font: inherit; font-size: 12px; color: var(--sub2); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; min-height: 32px; display: inline-flex; align-items: center; cursor: pointer; text-decoration: none; white-space: nowrap; }
+.alert-btn.primary { color: var(--accent); border-color: var(--accent); }
+.alert-btn:disabled { opacity: 0.5; cursor: default; }
+@media (max-width: 720px) {
+  .alerts { padding: 12px 14px; }
+  .alert-row { grid-template-columns: auto minmax(0, 1fr); }
+  .alert-msg, .alert-actions { grid-column: 1 / -1; }
+  .alert-actions { justify-content: flex-start; }
+  .alert-btn { min-height: 40px; }
+}

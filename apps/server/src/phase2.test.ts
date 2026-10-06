@@ -10,7 +10,7 @@ import { history, sessionDetail } from "./views";
 const cfg: ServerConfig = {
   host: "127.0.0.1",
   port: 0,
-  thresholds: { unresponsiveSec: 900, hideIdleAfterSec: 43200, ctxWarnPct: 70 },
+  thresholds: { unresponsiveSec: 900, hideIdleAfterSec: 43200, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
   passwordHash: null,
   sessionSecret: "x",
   sessionDays: 1,

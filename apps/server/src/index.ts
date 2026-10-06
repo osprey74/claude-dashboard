@@ -16,6 +16,7 @@ import {
   verifySessionCookieValue,
   type HostRow,
 } from "./auth";
+import { dismissAlert, evaluateAlerts } from "./alerts";
 import { DB_PATH, loadConfig } from "./config";
 import { openDb } from "./db";
 import { lastStatusline, processHook, processStatusline } from "./ingest";
@@ -34,6 +35,11 @@ let lastKey = "";
 let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
 function broadcastIfChanged(): void {
+  try {
+    evaluateAlerts(db, cfg);
+  } catch (e) {
+    console.error("[alerts] evaluate failed", e);
+  }
   const state = buildSnapshot(db, cfg);
   const key = snapshotKey(state);
   if (key === lastKey) return;
@@ -142,6 +148,14 @@ app.use("*", async (c, next) => {
 });
 
 app.get("/api/state", (c) => c.json(buildSnapshot(db, cfg)));
+
+app.post("/api/alerts/:id/dismiss", (c) => {
+  const id = Number(c.req.param("id"));
+  if (!Number.isInteger(id)) return c.json({ error: "bad id" }, 400);
+  const ok = dismissAlert(db, id);
+  if (ok) scheduleBroadcast();
+  return c.json({ ok });
+});
 
 app.get("/api/sessions/:id", (c) => {
   const d = sessionDetail(db, cfg, c.req.param("id"));

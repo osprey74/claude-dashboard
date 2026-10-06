@@ -111,10 +111,31 @@ export interface UsageView {
 export interface StateSnapshot {
   generatedAt: string;
   /** 画面の表示に使うしきい値 */
-  ui: { ctxWarnPct: number };
+  ui: { ctxWarnPct: number; idleAlertMin: number };
   hosts: HostView[];
   counts: { run: number; wait: number; err: number };
   usage: UsageView[];
+  /** 未対応のアラート（新しい順） */
+  alerts: AlertView[];
+}
+
+export type AlertKind = "idle" | "conflict" | "danger";
+
+export interface AlertView {
+  alertId: number;
+  kind: AlertKind;
+  hostLabel: string;
+  sessionId: string | null;
+  project: string | null;
+  /** 放置：待ちの内容と、待ち始めた時刻 */
+  waitText?: string;
+  waitingSince?: string;
+  /** 競合：ファイルと、編集した担当の表示名 */
+  path?: string;
+  actors?: string[];
+  /** 放置の Remote Control 用 */
+  remoteUrl?: string | null;
+  createdAt: string;
 }
 
 /** /ws で配信するメッセージ。フェーズ1は変化のたびに全体スナップショットを送る */
