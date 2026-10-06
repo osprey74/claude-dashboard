@@ -81,7 +81,10 @@ function loadPlayers(db: Database, sessions: SessionRow[]): Map<string, PlayerVi
     )
     .all(...sessions.map((s) => s.session_id));
   for (const r of rows) {
-    if (r.status !== "run" && r.started_at < (since.get(r.session_id) ?? "")) continue;
+    // 稼働中・直近のプロンプトより後に起動したもの・直近のプロンプトより後に終わったものを出す
+    // （完了したプレイヤーは、次のプロンプトまで完了の印で残る）
+    const s = since.get(r.session_id) ?? "";
+    if (r.status !== "run" && r.started_at < s && !(r.ended_at && r.ended_at >= s)) continue;
     const list = out.get(r.session_id) ?? [];
     list.push({
       playerId: r.player_id,

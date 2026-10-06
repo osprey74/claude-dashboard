@@ -1,3 +1,4 @@
+import { parseTaskNotification } from "./players";
 // フックイベントからセッション状態を判定する共通ロジック
 // 項目名は https://code.claude.com/docs/en/hooks（2026-10-06 確認）に基づく
 
@@ -36,7 +37,10 @@ export function statusFromHook(
       return { status: "wait", statusText: "起動 ・ 指示待ち" };
     }
     case "UserPromptSubmit":
-      return { status: "run", statusText: "プロンプト受信" };
+      return {
+        status: "run",
+        statusText: parseTaskNotification(payload.prompt) ? "バックグラウンドの作業の終了を受信" : "プロンプト受信",
+      };
     case "PreToolUse":
       return { status: "run", statusText: tool ? `ツール実行中 ・ ${tool}` : "ツール実行中" };
     case "PostToolUse":

@@ -1,7 +1,7 @@
 // 詳細パネルと履歴の API
 
 import type { Database } from "bun:sqlite";
-import {
+import { parseTaskNotification,
   AGENT_TOOLS,
   isCodexCall,
   statusFromHook,
@@ -73,8 +73,11 @@ const obj = (v: unknown) => (v && typeof v === "object" ? (v as Record<string, u
 /** 1件のイベントを履歴の1行にする。履歴に出さないイベントは null */
 function toHistory(type: string, tool: string | null, p: Record<string, unknown>): { kind: HistoryKind; text: string } | null {
   switch (type) {
-    case "UserPromptSubmit":
+    case "UserPromptSubmit": {
+      const note = parseTaskNotification(p.prompt);
+      if (note) return { kind: "done", text: `バックグラウンドの作業が終了${note.status ? ` ・ ${note.status}` : ""}` };
       return { kind: "prompt", text: "プロンプト受信 ・ " + excerpt(str(p.prompt)) };
+    }
     case "Stop":
       return { kind: "done", text: "作業完了" + (str(p.last_assistant_message) ? " ・ " + excerpt(str(p.last_assistant_message)) : "") };
     case "StopFailure":

@@ -171,3 +171,28 @@ describe("Remote Control の URL", () => {
     expect(urlOf(db, now())).toBeNull();
   });
 });
+
+describe("バックグラウンドの作業の終了の知らせ", () => {
+  test("プロンプトとして数えず、そのプレイヤーをすぐ完了にし、次のプロンプトまで表示に残す", () => {
+    const { db, send, now } = setup();
+    send("UserPromptSubmit", { prompt: "第二話をCodexで査読して" });
+    send("PreToolUse", {
+      tool_name: "Bash",
+      tool_use_id: "cx1",
+      tool_input: { command: 'C=$(command -v codex); "$C" exec "review"', run_in_background: true },
+    });
+    send("PostToolUse", { tool_name: "Bash", tool_use_id: "cx1" });
+    send("Stop", { background_tasks: [{ status: "running", command: 'C=$(command -v codex); "$C" exec "review"' }] });
+    send("UserPromptSubmit", { prompt: "34話に進みましょう" });
+    send("Stop", {});
+    send("UserPromptSubmit", {
+      prompt: "<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>cx1</tool-use-id>\n<status>completed</status>\n</task-notification>",
+    });
+    const players = () => buildSnapshot(db, cfg, now()).hosts[0]!.sessions[0]!.players;
+    expect(players().map((p) => [p.kind, p.status])).toEqual([["codex", "done"]]);
+    expect(sessionDetail(db, cfg, "s1", now())!.prompt?.text).toBe("34話に進みましょう");
+    // 次の人のプロンプトで消える
+    send("UserPromptSubmit", { prompt: "35話へ" });
+    expect(players()).toEqual([]);
+  });
+});

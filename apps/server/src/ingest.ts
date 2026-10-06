@@ -10,6 +10,7 @@ import {
   isCodexCall,
   isRemoteSessionId,
   modelLabel,
+  parseTaskNotification,
   todosFromInput,
   projectFromCwd,
   statusFromHook,
@@ -49,7 +50,8 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
       "INSERT INTO events (session_id, host_id, type, tool_name, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     ).run(sessionId, host.host_id, event, str(payload.tool_name) ?? null, JSON.stringify(payload), at);
 
-    if (event === "UserPromptSubmit" && sessionId && str(payload.prompt)) {
+    // バックグラウンドの作業の終了の知らせは、人のプロンプトとして保存しない
+    if (event === "UserPromptSubmit" && sessionId && str(payload.prompt) && !parseTaskNotification(payload.prompt)) {
       db.query("INSERT INTO prompts (session_id, text, created_at) VALUES (?, ?, ?)").run(
         sessionId,
         str(payload.prompt)!,
@@ -152,9 +154,19 @@ function trackDetails(db: Database, sessionId: string, event: string, payload: R
   const input = obj(payload.tool_input);
 
   switch (event) {
-    case "UserPromptSubmit":
-      db.query("UPDATE sessions SET last_prompt_at = ? WHERE session_id = ?").run(at, sessionId);
+    case "UserPromptSubmit": {
+      const note = parseTaskNotification(payload.prompt);
+      if (!note) {
+        db.query("UPDATE sessions SET last_prompt_at = ? WHERE session_id = ?").run(at, sessionId);
+        return;
+      }
+      // 終了の知らせ：どのツール呼び出しが終わったかが入っているので、そのプレイヤーをすぐに終了にする
+      if (note.toolUseId) {
+        const st = note.status === "completed" ? "done" : note.status ? "err" : "done";
+        db.query("UPDATE players SET status = ?, ended_at = ? WHERE player_id = ? AND status = 'run'").run(st, at, note.toolUseId);
+      }
       return;
+    }
 
     case "Stop": {
       const msg = str(payload.last_assistant_message);

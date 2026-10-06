@@ -118,3 +118,13 @@ export function isRemoteSessionId(v: unknown): v is string {
 export function usageAccountKey(u: { hostId: string; fiveHour: { resetsAt: string | null } | null; sevenDay: { resetsAt: string | null } | null }): string {
   return u.sevenDay?.resetsAt ?? u.fiveHour?.resetsAt ?? `host:${u.hostId}`;
 }
+
+/**
+ * バックグラウンドの作業（Bash・サブエージェント）が終わったときに、Claude Code が自動で送るプロンプト（<task-notification>）。
+ * 人のプロンプトではないので、直近のプロンプトや履歴には数えない。どのツール呼び出しが、どう終わったかを返す
+ */
+export function parseTaskNotification(prompt: unknown): { toolUseId: string | null; status: string | null } | null {
+  if (typeof prompt !== "string" || !/^\s*<task-notification>/.test(prompt)) return null;
+  const tag = (name: string) => prompt.match(new RegExp(`<${name}>\\s*([^<]+?)\\s*</${name}>`))?.[1] ?? null;
+  return { toolUseId: tag("tool-use-id"), status: tag("status") };
+}
