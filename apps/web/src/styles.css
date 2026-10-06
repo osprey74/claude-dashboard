@@ -1,0 +1,100 @@
+/* デザイン案「Claude 管制室」（docs/design/Main.dc.html・Mobile.dc.html）の値に合わせる */
+:root {
+  color-scheme: dark;
+  --bg: #0b111c;
+  --panel: #131b2a;
+  --line: #263247;
+  --tile: #1a2436;
+  --tile-sel: #1e2b42;
+  --text: #e8edf4;
+  --sub: #9da9bb;
+  --sub2: #b7c1d0;
+  --muted: #6b778a;
+  --accent: #5bc0d6;
+  --run: #43c57f;
+  --wait: #f5c451;
+  --err: #f06a43;
+  --opus: #c9a2ff;
+  --sonnet: #7dbbff;
+  --haiku: #7fe0c6;
+  --fable: #ffb37a;
+  --font: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); }
+.mono { font-family: var(--mono); }
+code { font-family: var(--mono); font-size: 12px; background: #0f1624; border-radius: 4px; padding: 1px 6px; }
+h1, h2 { margin: 0; }
+
+.page { min-height: 100vh; padding: 24px; }
+.container { max-width: 1392px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+
+/* ヘッダー */
+.header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; }
+.brand { display: flex; align-items: center; gap: 14px; }
+.brand h1 { font-size: 22px; font-weight: 700; letter-spacing: 0.04em; }
+.brand-sub { font-size: 13px; color: var(--sub); margin-top: 2px; }
+.conn-warn { color: #f8dc92; }
+.counts { display: flex; flex-wrap: wrap; gap: 10px; }
+.count { display: flex; align-items: center; gap: 8px; padding: 8px 14px; background: var(--tile); border-radius: 10px; }
+.count-label { font-size: 13px; }
+.count-n { font-size: 18px; font-weight: 600; }
+
+/* PC とセッション */
+.hosts-section { display: flex; flex-direction: column; gap: 16px; }
+.section-head h2 { font-size: 16px; font-weight: 700; }
+.host-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+.empty { color: var(--sub); font-size: 14px; margin: 0; line-height: 1.8; }
+.empty.panel { padding: 16px 20px; }
+
+.host { padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.host-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.host-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.host-name { font-size: 15px; font-weight: 600; }
+.host-sub { font-size: 12px; color: var(--sub); }
+.host-beat { font-size: 12px; color: var(--sub); text-align: right; white-space: nowrap; }
+.host-sub { overflow-wrap: anywhere; }
+.host-empty { margin: 0; font-size: 13px; color: var(--sub); padding: 4px 2px; }
+
+.tile {
+  font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 8px; width: 100%;
+  padding: 12px; min-height: 44px; border-radius: 10px; background: var(--tile); border: 1px solid var(--line); color: var(--text);
+}
+.tile:hover { border-color: #3a4a66; }
+.tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tile.selected { background: var(--tile-sel); border: 2px solid var(--accent); padding: 11px; }
+.tile-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.tile-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.indicator { flex: none; }
+.tile-project { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tile-status { font-size: 12px; color: var(--sub2); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-word { font-weight: 700; }
+.status-run { color: #9fe0bc; }
+.status-wait { color: #f8dc92; }
+.status-err { color: #ffb8a3; }
+.tile-ago { font-size: 11px; color: var(--sub); white-space: nowrap; font-family: var(--mono); }
+
+.model {
+  font-family: var(--mono); font-size: 11px; font-weight: 600; border: 1px solid currentColor; border-radius: 6px;
+  padding: 2px 7px; white-space: nowrap; color: var(--sub2);
+}
+.model-opus { color: var(--opus); }
+.model-sonnet { color: var(--sonnet); }
+.model-haiku { color: var(--haiku); }
+.model-fable { color: var(--fable); }
+
+/* スマホ幅（Mobile.dc.html） */
+@media (max-width: 720px) {
+  .page { padding: 20px 16px 12px; }
+  .container { gap: 14px; }
+  .host-grid { grid-template-columns: minmax(0, 1fr); }
+  .header { padding: 14px 16px; }
+  .brand h1 { font-size: 20px; }
+  .counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; width: 100%; }
+  .count { flex-direction: column; gap: 4px; padding: 10px; border: 1px solid var(--line); background: var(--panel); }
+  .count-n { font-size: 20px; }
+  .count-label { font-size: 11px; color: var(--sub); order: 3; }
+}
