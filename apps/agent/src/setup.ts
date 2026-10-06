@@ -5,6 +5,7 @@ import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFile
 import { homedir, platform } from "node:os";
 import { basename, join } from "node:path";
 import { AGENT_DIR, CONFIG_PATH, loadConfig, type AgentConfig } from "./common";
+import { LAUNCHER_NAME, LAUNCHER_SH } from "./launcher";
 
 /** 登録するフックイベント。phase1.md の8種に、状態判定の精度を上げる3種（※）を加える */
 export const HOOK_EVENTS = [
@@ -26,6 +27,8 @@ const SETTINGS_PATH = join(homedir(), ".claude", "settings.json");
 const isWin = platform() === "win32";
 const BIN_DIR = join(AGENT_DIR, "bin");
 const BIN_PATH = join(BIN_DIR, isWin ? "kanseishitsu-agent.exe" : "kanseishitsu-agent");
+/** macOS では hooks・statusLine から起動役（launcher.ts）を呼ぶ */
+const LAUNCHER_PATH = join(BIN_DIR, LAUNCHER_NAME);
 
 /** 設定ファイルに書くパス。Windows でも Git Bash で壊れないよう / 区切りにする */
 const slashPath = (p: string) => p.replace(/\\/g, "/");
@@ -60,9 +63,17 @@ export function desiredEntries(binPath: string) {
   return { hooks, statusLine: { type: "command", command: statusCommand, padding: 0 }, cmd };
 }
 
-/** 既存の設定に追記した結果と、変更点の説明を返す */
-export function mergeSettings(current: Settings, binPath: string): { next: Settings; changes: string[]; warnings: string[] } {
+/**
+ * 既存の設定に追記した結果と、変更点の説明を返す。
+ * legacyPaths（以前に登録した呼び出し先。macOS で起動役を挟む前の実行ファイルなど）の登録は、新しい呼び出し先に置き換える
+ */
+export function mergeSettings(
+  current: Settings,
+  binPath: string,
+  legacyPaths: string[] = [],
+): { next: Settings; changes: string[]; warnings: string[] } {
   const want = desiredEntries(binPath);
+  const legacy = legacyPaths.map(slashPath).filter((p) => p !== want.cmd);
   const next: Settings = structuredClone(current);
   const changes: string[] = [];
   const warnings: string[] = [];
@@ -70,14 +81,21 @@ export function mergeSettings(current: Settings, binPath: string): { next: Setti
   for (const [ev, groups] of Object.entries(want.hooks)) {
     const existing = next.hooks[ev] ?? [];
     const already = existing.some((g) => g.hooks?.some((h) => slashPath(h.command ?? "") === want.cmd));
-    if (already) continue;
-    next.hooks[ev] = [...existing, ...groups];
-    changes.push(`hooks.${ev} に追加（既存 ${existing.length} 件はそのまま）`);
+    const isLegacy = (g: MatcherGroup) => g.hooks?.some((h) => legacy.includes(slashPath(h.command ?? "")));
+    const kept = existing.filter((g) => !isLegacy(g));
+    if (already && kept.length === existing.length) continue;
+    next.hooks[ev] = already ? kept : [...kept, ...groups];
+    changes.push(
+      kept.length < existing.length
+        ? `hooks.${ev} の登録を ${want.cmd} の呼び出しに置き換え`
+        : `hooks.${ev} に追加（既存 ${existing.length} 件はそのまま）`,
+    );
   }
   const sl = next.statusLine;
-  if (!sl) {
+  const slLegacy = sl && legacy.some((p) => [p, `"${p}"`].some((q) => slashPath(sl.command ?? "") === `${q} statusline`));
+  if (!sl || slLegacy) {
     next.statusLine = want.statusLine;
-    changes.push(`statusLine を設定: ${want.statusLine.command}`);
+    changes.push(`statusLine を設定: ${want.statusLine.command}${slLegacy ? `（以前: ${sl!.command}）` : ""}`);
   } else if (!slashPath(sl.command ?? "").includes(want.cmd)) {
     warnings.push(
       `statusLine は既に設定されているため変更しません（現在: ${sl.command}）。` +
@@ -116,6 +134,7 @@ export async function setup(argv: string[]): Promise<void> {
 
   // 実行ファイルを決まった場所に置く（設定ファイルに書くパスを固定するため）
   let binPath = process.execPath;
+  const legacyPaths: string[] = [];
   if (isCompiled()) {
     mkdirSync(BIN_DIR, { recursive: true });
     if (slashPath(process.execPath) !== slashPath(BIN_PATH)) {
@@ -124,12 +143,19 @@ export async function setup(argv: string[]): Promise<void> {
       console.log(`実行ファイルを配置しました: ${BIN_PATH}`);
     }
     binPath = BIN_PATH;
+    if (platform() === "darwin") {
+      writeFileSync(LAUNCHER_PATH, LAUNCHER_SH, { mode: 0o755 });
+      chmodSync(LAUNCHER_PATH, 0o755);
+      console.log(`起動役を配置しました: ${LAUNCHER_PATH}`);
+      legacyPaths.push(BIN_PATH);
+      binPath = LAUNCHER_PATH;
+    }
   } else {
     console.log("（開発モード：bun で実行中のため、実行ファイルの配置は行いません）");
   }
 
   const current: Settings = existsSync(SETTINGS_PATH) ? JSON.parse(readFileSync(SETTINGS_PATH, "utf8")) : {};
-  const { next, changes, warnings } = mergeSettings(current, binPath);
+  const { next, changes, warnings } = mergeSettings(current, binPath, legacyPaths);
 
   console.log(`\n${SETTINGS_PATH} への変更内容:`);
   if (changes.length === 0) console.log("  （変更なし：登録済みです）");
