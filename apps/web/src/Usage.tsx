@@ -16,18 +16,16 @@ const untilText = (iso: string | null, now: Date) => {
 };
 
 /**
- * 利用枠はアカウント単位の値。同じアカウントの PC からは同じ値が届くため、値が同じものはまとめ、
+ * 利用枠はアカウント単位の値。同じアカウントの PC からはリセット時刻が同じ値が届くため、それを1行にまとめて最新の値を出す。
  * 24 時間以内に届いた値だけを出す（別のアカウントの PC があれば行が分かれる）
  */
 function distinct(usage: UsageView[], now: Date): UsageView[] {
   const out: UsageView[] = [];
   for (const u of usage) {
     if (now.getTime() - Date.parse(u.takenAt) > 24 * 3600_000) continue;
+    // usage は新しい順に並んでいるので、先に入ったものが最新
     const same = out.find(
-      (o) =>
-        o.fiveHour?.resetsAt === u.fiveHour?.resetsAt &&
-        o.sevenDay?.resetsAt === u.sevenDay?.resetsAt &&
-        Math.abs((o.fiveHour?.usedPct ?? 0) - (u.fiveHour?.usedPct ?? 0)) <= 2,
+      (o) => o.fiveHour?.resetsAt === u.fiveHour?.resetsAt && o.sevenDay?.resetsAt === u.sevenDay?.resetsAt,
     );
     if (!same) out.push(u);
   }

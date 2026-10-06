@@ -11,6 +11,14 @@ const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
 const CODEX_COMMAND =
   /(?:^|[;&|(]|\$\()\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:npx\s+(?:-y\s+)?@openai\/)?codex(?:\.exe|\.cmd)?(?=\s|$)/m;
 
+// ヒアドキュメントの本文と、引用符で囲まれた文字列（ファイルに書き込む内容やメッセージ）は判定の対象外にする
+const HEREDOC = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g;
+const QUOTED = /'[^']*'|"(?:\\.|[^"\\])*"/g;
+
+export function stripQuoted(command: string): string {
+  return command.replace(HEREDOC, "").replace(QUOTED, "''");
+}
+
 /** ツール呼び出しが Codex CLI の起動かどうか */
 export function isCodexCall(toolName: string | undefined, toolInput: Record<string, unknown> | undefined): boolean {
   if (!toolName) return false;
@@ -18,7 +26,7 @@ export function isCodexCall(toolName: string | undefined, toolInput: Record<stri
   if (toolName.startsWith("mcp__") && /codex/i.test(toolName)) return true;
   if (!SHELL_TOOLS.has(toolName)) return false;
   const cmd = toolInput?.command;
-  return typeof cmd === "string" && CODEX_COMMAND.test(cmd);
+  return typeof cmd === "string" && CODEX_COMMAND.test(stripQuoted(cmd));
 }
 
 export interface TodoItem {

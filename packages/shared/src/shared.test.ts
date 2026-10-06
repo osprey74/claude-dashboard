@@ -95,6 +95,11 @@ describe("isCodexCall", () => {
     expect(bash("grep -r codex src/")).toBe(false);
     expect(bash("cat docs/codex.md")).toBe(false);
     expect(isCodexCall("Read", { file_path: "codex" })).toBe(false);
+    // 文字列やヒアドキュメントの中身は対象外
+    expect(bash(`git commit -m "& codex exec 'x'"`)).toBe(false);
+    expect(bash("echo '; codex run'")).toBe(false);
+    expect(bash("cat >> t.ts <<'EOF'\n  bash(\"& codex.exe exec 'x'\")\ncodex exec y\nEOF\nbun test")).toBe(false);
+    expect(bash("cat > p.txt <<EOF\nhello\nEOF\ncodex exec 'after heredoc'")).toBe(true);
   });
 });
 
