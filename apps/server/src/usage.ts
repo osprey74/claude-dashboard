@@ -6,7 +6,7 @@
 //   費用はモデルの単価で重み付けされるため、利用枠の減り方に近い指標として使う（推定）。チャットや Cowork の消費は含まない
 
 import type { Database } from "bun:sqlite";
-import type { UsageBreakdown, UsageForecast } from "@kanseishitsu/shared";
+import { estimateUsd, type TokenCounts, type UsageBreakdown, type UsageForecast } from "@kanseishitsu/shared";
 
 const FIVE_HOUR_MS = 5 * 3600_000;
 const SEVEN_DAY_MS = 7 * 86400_000;
@@ -35,6 +35,26 @@ export function recordCost(
     costUsd,
     source,
   );
+}
+
+/** 会話記録からの見積もり：時間帯（10分刻み）ごとの費用を置き換えて記録する */
+export function recordTranscriptCosts(
+  db: Database,
+  hostId: string,
+  sessionId: string,
+  buckets: Record<string, Record<string, Partial<TokenCounts>>>,
+  now: Date,
+): void {
+  const oldest = now.getTime() - 8 * 86400_000;
+  const upsert = db.query(
+    `INSERT INTO transcript_costs (session_id, host_id, bucket_start, usd) VALUES (?, ?, ?, ?)
+     ON CONFLICT(session_id, bucket_start) DO UPDATE SET usd = excluded.usd, host_id = excluded.host_id`,
+  );
+  for (const [bucket, models] of Object.entries(buckets)) {
+    const t = Date.parse(bucket);
+    if (!Number.isFinite(t) || t < oldest || t > now.getTime() + 600_000 || !models || typeof models !== "object") continue;
+    upsert.run(sessionId, hostId, new Date(t).toISOString(), estimateUsd(models));
+  }
 }
 
 type Win = "five" | "seven";
@@ -94,16 +114,27 @@ export function breakdown(db: Database, hostIds: string[], resetsAt: string | nu
   const start = new Date(Date.parse(resetsAt) - (win === "five" ? FIVE_HOUR_MS : SEVEN_DAY_MS)).toISOString();
   const marks = hostIds.map(() => "?").join(",");
   // statusLine の値があるセッションはそれを、ないセッション（VS Code・Desktop）は会話記録からの見積もりを使う
-  const all = db
+  const rows = db
     .query<{ session_id: string; taken_at: string; cost_usd: number; source: CostSource }, string[]>(
       `SELECT session_id, taken_at, cost_usd, source FROM session_costs
-       WHERE host_id IN (${marks}) AND taken_at >= ? AND taken_at <= ? ORDER BY session_id, source, taken_at`,
+       WHERE host_id IN (${marks}) AND source = 'statusline' AND taken_at >= ? AND taken_at <= ? ORDER BY session_id, taken_at`,
     )
     .all(...hostIds, start, now.toISOString());
-  const hasStatusline = new Set(all.filter((r) => r.source === "statusline").map((r) => r.session_id));
-  const rows = all.filter((r) => (hasStatusline.has(r.session_id) ? r.source === "statusline" : r.source === "transcript"));
-  const sourceOf = new Map(rows.map((r) => [r.session_id, r.source]));
+  const hasStatusline = new Set(rows.map((r) => r.session_id));
+  const sourceOf = new Map<string, CostSource>(rows.map((r) => [r.session_id, "statusline"]));
   const used = new Map<string, number>();
+  // 見積もりは、枠の中の時間帯の分だけを足す
+  const est = db
+    .query<{ session_id: string; usd: number }, string[]>(
+      `SELECT session_id, SUM(usd) AS usd FROM transcript_costs
+       WHERE host_id IN (${marks}) AND bucket_start >= ? AND bucket_start <= ? GROUP BY session_id`,
+    )
+    .all(...hostIds, start, now.toISOString());
+  for (const e of est) {
+    if (hasStatusline.has(e.session_id)) continue;
+    used.set(e.session_id, e.usd);
+    sourceOf.set(e.session_id, "transcript");
+  }
   let prevSession = "";
   let prev = 0;
   for (const r of rows) {

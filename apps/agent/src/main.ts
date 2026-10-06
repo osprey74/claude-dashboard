@@ -29,7 +29,7 @@ async function runHook(event: string): Promise<void> {
   if (event === "Stop" || event === "SubagentStop" || event === "SessionEnd") {
     try {
       const usage = sessionTokenUsage(payload.session_id, payload.transcript_path);
-      if (usage) payload.token_usage = usage;
+      if (usage) payload.token_buckets = usage;
     } catch (e) {
       log(`token usage error: ${String(e)}`);
     }

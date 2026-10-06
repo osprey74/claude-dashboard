@@ -2,8 +2,8 @@
 
 import type { Database } from "bun:sqlite";
 import { recordDanger, recordTouch, trackDangerOutcome } from "./alerts";
-import { estimateUsd, type TokenCounts } from "@kanseishitsu/shared";
-import { recordCost } from "./usage";
+import type { TokenCounts } from "@kanseishitsu/shared";
+import { recordCost, recordTranscriptCosts } from "./usage";
 import {
   AGENT_TOOLS,
   codexModel,
@@ -89,8 +89,8 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
     trackDetails(db, sessionId, event, payload, at);
     if (event === "PostToolUse") recordTouch(db, host.host_id, sessionId, payload, at);
     if (event === "GuardHit") recordDanger(db, host.host_id, sessionId, payload, at);
-    const tokens = obj(payload.token_usage) as Record<string, Partial<TokenCounts>> | undefined;
-    if (tokens) recordCost(db, host.host_id, sessionId, estimateUsd(tokens), at, "transcript");
+    const buckets = obj(payload.token_buckets) as Record<string, Record<string, Partial<TokenCounts>>> | undefined;
+    if (buckets) recordTranscriptCosts(db, host.host_id, sessionId, buckets, now);
     else trackDangerOutcome(db, sessionId, event, str(payload.tool_use_id), at);
   })();
 }

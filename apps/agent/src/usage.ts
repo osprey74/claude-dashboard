@@ -1,4 +1,5 @@
-// 会話記録（メインとサブエージェント）から、モデルごとのトークン数を数える。
+// 会話記録（メインとサブエージェント）から、モデルごとのトークン数を10分刻みの時間帯ごとに数える。
+// 時間帯に分けるのは、開き直した古い会話の分を、今の利用枠に入れないため（サーバーは枠の中の時間帯だけを足す）。
 // 記録は追記されていくので、前回読んだ位置を ~/.kanseishitsu/usage/<セッション>.json に覚えて、続きだけを読む。
 // 1つの応答は内容ブロックごとに複数の行に分かれ、同じ usage が繰り返されるため、message.id で重複を除く
 
@@ -11,9 +12,22 @@ interface FileState {
   offset: number;
   lastId: string;
 }
+/** 時間帯（10分刻みの開始時刻）→ モデル → トークン数 */
+export type TokenBuckets = Record<string, Record<string, TokenCounts>>;
+
 interface UsageState {
+  version: 2;
   files: Record<string, FileState>;
-  byModel: Record<string, TokenCounts>;
+  buckets: TokenBuckets;
+}
+
+const BUCKET_MS = 10 * 60_000;
+/** 週間枠の計算に要る分だけ残す */
+const KEEP_MS = 8 * 86400_000;
+
+function bucketOf(ts: unknown): string | null {
+  const t = typeof ts === "string" ? Date.parse(ts) : NaN;
+  return Number.isFinite(t) ? new Date(Math.floor(t / BUCKET_MS) * BUCKET_MS).toISOString() : null;
 }
 
 const STATE_DIR = join(AGENT_DIR, "usage");
@@ -39,8 +53,9 @@ function readFrom(path: string, offset: number): { text: string; end: number } {
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
-function add(state: UsageState, model: string, u: Record<string, unknown>): void {
-  const c = (state.byModel[model] ??= { input: 0, output: 0, cacheRead: 0, cache5m: 0, cache1h: 0 });
+function add(state: UsageState, bucket: string, model: string, u: Record<string, unknown>): void {
+  const b = (state.buckets[bucket] ??= {});
+  const c = (b[model] ??= { input: 0, output: 0, cacheRead: 0, cache5m: 0, cache1h: 0 });
   c.input += n(u.input_tokens);
   c.output += n(u.output_tokens);
   c.cacheRead += n(u.cache_read_input_tokens);
@@ -53,14 +68,16 @@ function add(state: UsageState, model: string, u: Record<string, unknown>): void
   }
 }
 
-/** セッションの累計（モデルごと）。会話記録が見つからなければ null */
-export function sessionTokenUsage(sessionId: unknown, transcriptPath: unknown): Record<string, TokenCounts> | null {
+/** セッションの時間帯ごとのトークン数（直近8日分）。会話記録が見つからなければ null */
+export function sessionTokenUsage(sessionId: unknown, transcriptPath: unknown, now = new Date()): TokenBuckets | null {
   if (typeof sessionId !== "string" || !/^[\w-]+$/.test(sessionId) || typeof transcriptPath !== "string") return null;
   if (!existsSync(transcriptPath)) return null;
   const statePath = join(STATE_DIR, `${sessionId}.json`);
-  let state: UsageState = { files: {}, byModel: {} };
+  let state: UsageState = { version: 2, files: {}, buckets: {} };
   try {
-    state = JSON.parse(readFileSync(statePath, "utf8")) as UsageState;
+    const saved = JSON.parse(readFileSync(statePath, "utf8")) as UsageState;
+    // 時間帯に分けていなかった版（v0.4.1）の記録は使わず、最初から読み直す
+    if (saved.version === 2) state = saved;
   } catch {
     // 初回
   }
@@ -87,15 +104,18 @@ export function sessionTokenUsage(sessionId: unknown, transcriptPath: unknown): 
       const id = typeof m?.id === "string" ? m.id : "";
       if (d.type !== "assistant" || !u || !id || id === fs.lastId) continue;
       fs.lastId = id;
-      add(state, typeof m?.model === "string" ? m.model : "unknown", u);
+      const bucket = bucketOf(d.timestamp);
+      if (bucket) add(state, bucket, typeof m?.model === "string" ? m.model : "unknown", u);
     }
     fs.offset = end;
   }
+  const oldest = now.getTime() - KEEP_MS;
+  for (const k of Object.keys(state.buckets)) if (Date.parse(k) < oldest) delete state.buckets[k];
   try {
     if (!existsSync(STATE_DIR)) mkdirSync(STATE_DIR, { recursive: true });
     writeFileSync(statePath, JSON.stringify(state));
   } catch {
     // 覚えられなくても、今回の値は送る
   }
-  return state.byModel;
+  return state.buckets;
 }

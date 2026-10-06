@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { issueHostToken } from "./auth";
 import { openDb } from "./db";
-import { breakdown, forecast, recordCost } from "./usage";
+import { breakdown, forecast, recordCost, recordTranscriptCosts } from "./usage";
 
 const RESET = "2026-10-06T10:00:00.000Z";
 const iso = (min: number) => new Date(Date.parse("2026-10-06T07:00:00Z") + min * 60_000).toISOString();
@@ -86,13 +86,19 @@ describe("消費内訳の出どころ", () => {
     const { db, hostId, session } = setup();
     session("term", 0);
     session("vscode", 0);
+    const now = new Date(iso(10));
+    // Sonnet 5.5 の出力 10万トークン = $1。枠（05:00 から）より前の時間帯の分は数えない
+    const out = (n: number) => ({ "claude-sonnet-5-5": { output: n } });
     recordCost(db, hostId, "term", 2, iso(5));
-    recordCost(db, hostId, "term", 1.8, iso(6), "transcript");
-    recordCost(db, hostId, "vscode", 1, iso(7), "transcript");
-    const b = breakdown(db, [hostId], RESET, "five", new Date(iso(10)))!;
+    recordTranscriptCosts(db, hostId, "term", { [iso(0)]: out(50_000) }, now);
+    recordTranscriptCosts(db, hostId, "vscode", { "2026-10-06T04:50:00.000Z": out(300_000), [iso(0)]: out(100_000) }, now);
+    const b = breakdown(db, [hostId], RESET, "five", now)!;
     expect(b.items.map((i) => [i.project, i.usd, i.estimated])).toEqual([
       ["proj-term", 2, false],
       ["proj-vscode", 1, true],
     ]);
+    // 同じ時間帯が届き直したら置き換える
+    recordTranscriptCosts(db, hostId, "vscode", { [iso(0)]: out(150_000) }, now);
+    expect(breakdown(db, [hostId], RESET, "five", now)!.items[1]!.usd).toBe(1.5);
   });
 });
