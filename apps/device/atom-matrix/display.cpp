@@ -5,7 +5,7 @@
 //   異常（err）：25個すべて朱色で点滅。明るさはボタンの設定によらず最大（M5Stack 推奨の上限 20）
 //   それ以外  ：左2列＝5時間枠、右2列＝週間枠の残り。2列×5段の10個で、1個 10%（切り上げ）。下から積み上げる
 //               色は残り 50% 以上が緑、20% 以上が黄、それ未満が橙。残りが不明なら、その列の一番下を灰色で点ける
-//               中央の1個はセッションの状態（稼働中＝緑、入力待ち＝黄、なし＝消灯）
+//               中央の列の縦3個（2〜4段目）はセッションの状態（稼働中＝緑、入力待ち＝黄、なし＝消灯）
 // 45 秒間何も届かなければ、途切れた表示（左上の暗い青の点滅）にする。ボタンで明るさを3段階に切り替える。
 
 #include <Adafruit_NeoPixel.h>
@@ -66,8 +66,8 @@ void render() {
   }
   drawBar(0, fiveRemain);
   drawBar(3, weekRemain);
-  if (state == RUN) setXY(2, 2, px.Color(0x43, 0xc5, 0x7f));
-  else if (state == WAIT) setXY(2, 2, px.Color(0xf5, 0xc4, 0x51));
+  uint32_t sc = state == RUN ? px.Color(0x43, 0xc5, 0x7f) : state == WAIT ? px.Color(0xf5, 0xc4, 0x51) : 0;
+  for (int y = 1; y <= 3; y++) setXY(2, y, sc);
   px.show();
 }
 
