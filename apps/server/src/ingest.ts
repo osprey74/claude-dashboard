@@ -138,6 +138,18 @@ function trackDetails(db: Database, sessionId: string, event: string, payload: R
     case "Stop": {
       const msg = str(payload.last_assistant_message);
       if (msg) db.query("UPDATE sessions SET last_result = ? WHERE session_id = ?").run(clip(msg, RESULT_MAX), sessionId);
+      // バックグラウンドの Codex は終了のイベントがないため、実行中のバックグラウンドタスクに codex が残っていなければ完了とする
+      const tasks = Array.isArray(payload.background_tasks) ? payload.background_tasks : [];
+      const codexRunning = tasks.some((t) => {
+        const o = obj(t);
+        return o?.status === "running" && isCodexCall("Bash", { command: str(o.command) ?? "" });
+      });
+      if (!codexRunning) {
+        db.query("UPDATE players SET status = 'done', ended_at = ? WHERE session_id = ? AND kind = 'codex' AND status = 'run'").run(
+          at,
+          sessionId,
+        );
+      }
       return;
     }
 

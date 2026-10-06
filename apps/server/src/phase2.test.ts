@@ -133,3 +133,16 @@ describe("詳細と履歴", () => {
     expect(history(db, "all", 2).length).toBe(2);
   });
 });
+
+describe("バックグラウンドの Codex", () => {
+  test("Stop の background_tasks に残っていれば稼働中、なければ完了", () => {
+    const { db, send, now } = setup();
+    send("UserPromptSubmit", { prompt: "レビューして" });
+    send("PreToolUse", { tool_name: "Bash", tool_use_id: "c1", tool_input: { command: "codex exec 'review'", run_in_background: true } });
+    send("PostToolUse", { tool_name: "Bash", tool_use_id: "c1", tool_response: {} });
+    send("Stop", { background_tasks: [{ id: "b1", type: "shell", status: "running", command: "codex exec 'review'" }] });
+    expect(buildSnapshot(db, cfg, now()).hosts[0]!.sessions[0]!.players[0]!.status).toBe("run");
+    send("Stop", { background_tasks: [] });
+    expect(buildSnapshot(db, cfg, now()).hosts[0]!.sessions[0]!.players[0]!.status).toBe("done");
+  });
+});
