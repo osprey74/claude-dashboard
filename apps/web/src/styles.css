@@ -98,3 +98,10 @@ h1, h2 { margin: 0; }
   .count-n { font-size: 20px; }
   .count-label { font-size: 11px; color: var(--sub); order: 3; }
 }
+
+/* フッター */
+.footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 12px; color: var(--sub); padding: 4px 2px; }
+.footer a { color: #7fd3e4; }
+.footer a:hover { color: #b5e8f2; }
+.logout { margin-left: auto; }
+.logout button { font: inherit; font-size: 12px; color: var(--sub); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-height: 32px; cursor: pointer; }

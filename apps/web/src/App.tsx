@@ -33,6 +33,14 @@ export function App() {
             </div>
           )}
         </section>
+        <footer className="footer">
+          PC 側エージェント：
+          <a href="/downloads/kanseishitsu-agent-windows-x64.exe">Windows（x64）</a> ・
+          <a href="/downloads/kanseishitsu-agent-macos-arm64">macOS（arm64）</a>
+          <form method="post" action="/logout" className="logout">
+            <button type="submit">ログアウト</button>
+          </form>
+        </footer>
       </div>
     </div>
   );

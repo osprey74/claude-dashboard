@@ -142,6 +142,21 @@ app.get("/api/state", (c) => c.json(buildSnapshot(db, cfg)));
 // フェーズ1ゲート確認用：最後に届いた statusLine の内容（rate_limits が届くかの確認）
 app.get("/api/debug/statusline", (c) => c.json(Object.fromEntries(lastStatusline)));
 
+// PC 側エージェントの配布（bun run build:agent の成果物）
+const AGENT_BIN = join(import.meta.dir, "..", "..", "agent", "bin");
+const AGENT_FILES = ["kanseishitsu-agent-windows-x64.exe", "kanseishitsu-agent-macos-arm64"];
+app.get("/downloads/:file", (c) => {
+  const name = c.req.param("file");
+  const path = join(AGENT_BIN, name);
+  if (!AGENT_FILES.includes(name) || !existsSync(path)) return c.notFound();
+  return new Response(Bun.file(path), {
+    headers: {
+      "Content-Type": "application/octet-stream",
+      "Content-Disposition": `attachment; filename="${name}"`,
+    },
+  });
+});
+
 if (existsSync(WEB_DIST)) {
   app.use("/*", serveStatic({ root: WEB_DIST }));
   app.get("*", serveStatic({ path: join(WEB_DIST, "index.html") }));
