@@ -1,7 +1,7 @@
 // agent setup：設定ファイルの作成と、Claude Code の設定（~/.claude/settings.json）への登録
 // settings.json は --apply を付けたときだけ、差分を表示して確認を取ってから追記する（既存の設定は上書きしない）
 
-import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
 import { basename, join } from "node:path";
 import { AGENT_DIR, CONFIG_PATH, loadConfig, type AgentConfig } from "./common";
@@ -138,14 +138,19 @@ export async function setup(argv: string[]): Promise<void> {
   if (isCompiled()) {
     mkdirSync(BIN_DIR, { recursive: true });
     if (slashPath(process.execPath) !== slashPath(BIN_PATH)) {
-      copyFileSync(process.execPath, BIN_PATH);
-      if (!isWin) chmodSync(BIN_PATH, 0o755);
+      // 動いている実行ファイルをその場で上書きすると、macOS では署名の食い違いで起動できなくなることがある。
+      // 別名にコピーしてから名前を付け替える
+      const tmp = `${BIN_PATH}.new`;
+      copyFileSync(process.execPath, tmp);
+      if (!isWin) chmodSync(tmp, 0o755);
+      renameSync(tmp, BIN_PATH);
       console.log(`実行ファイルを配置しました: ${BIN_PATH}`);
     }
     binPath = BIN_PATH;
     if (platform() === "darwin") {
-      writeFileSync(LAUNCHER_PATH, LAUNCHER_SH, { mode: 0o755 });
-      chmodSync(LAUNCHER_PATH, 0o755);
+      writeFileSync(`${LAUNCHER_PATH}.new`, LAUNCHER_SH, { mode: 0o755 });
+      chmodSync(`${LAUNCHER_PATH}.new`, 0o755);
+      renameSync(`${LAUNCHER_PATH}.new`, LAUNCHER_PATH);
       console.log(`起動役を配置しました: ${LAUNCHER_PATH}`);
       legacyPaths.push(BIN_PATH);
       binPath = LAUNCHER_PATH;
