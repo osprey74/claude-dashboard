@@ -10,7 +10,7 @@
 | 2 詳細と履歴 | 完了。サブエージェントは実機、Codex CLI は検知用のダミーで確認（モデルは起動コマンドの `-m` などから読む） |
 | 3 指示送信 | **保留**。自作 Channel が組織の設定で無効なため、代わりに Remote Control への導線を実装 |
 | 4 アラート | 完了。放置・ファイル競合・危険操作のガード・Web Push 通知 |
-| 5 拡張 | 未着手 |
+| 5 拡張 | 上限予測・消費内訳・物理表示灯は完了。Cowork の OTel 受信は見送り（送信先の設定に組織の管理者の作業が必要） |
 
 計画から変えた点は次のとおりです。
 
@@ -21,6 +21,9 @@
 - **エージェントの起動役（macOS）**：macOS 27 で、Bun 製の実行ファイルが起動・終了の途中で止まり、Claude Code ごと固まる事象がありました。hooks と statusLine は `/bin/sh` の起動役から呼び、エージェントを切り離して起動します。
 - **放置アラートの対象**：許可待ちと質問への回答待ちに限りました。作業を終えて次の指示を待っているだけの状態は、通常の休憩なので対象外です。
 - **プッシュ通知**：Web Push（VAPID）で実装しました。iPhone はホーム画面に追加したアプリから購読します。
+- **上限予測**：同じアカウント（5時間枠のリセット時刻が同じ）の直近の記録を直線で近似し、100% に届く見込みの時刻を出します。5時間枠は直近30分、週間枠は直近3時間の記録を使い、短すぎる期間では出しません。
+- **消費内訳**：計画の OTel のトークン数ではなく、statusLine の `cost.total_cost_usd`（セッションの累計、API 料金換算の推定）の、今の枠の中での増分で割合を出します。各 PC に OTel の設定を足さずに済むためです。statusLine が呼ばれない VS Code・Desktop のセッションは、エージェントが会話記録のトークン数を10分刻みの時間帯ごとに数えて送り、サーバーが API の単価で換算します（見積もり）。開き直した古い会話の分は、時間帯で除きます。見積もりは、会話記録に残らない裏側の呼び出しを含まないため、statusLine の値より少なめに出ます（このプロジェクトのセッションで約12%）。チャットと Cowork の消費は含みません。
+- **物理表示灯**：M5Stack Atom Matrix を Mac Mini に USB でつなぎ、サーバーがいちばん重い状態をシリアル通信で送ります。計画の WebSocket（Wi-Fi）をやめ、ネットワークに口を開けないようにしました。表示は画面の表示灯と同じ形（朱の四角・黄の三角・緑の丸）で、45秒届かなければ「途切れた」表示になります。書き込みは arduino-cli で、速さは 115200bps です。
 
 ## 概要
 
@@ -87,7 +90,7 @@ Remote Control は Anthropic を経由してスマホと各PCを直接つなぐ�
 | PC 側の送信処理 | TypeScript を Bun で単一実行ファイル化し、Windows・macOS に配布 | hooks・statusLine・Channel を1つのコードで保守できる |
 | 常駐 | launchd（Mac Mini） | 再起動時の自動起動とログ管理 |
 | ネットワーク | 個人の Tailscale に Mac Mini を置き、会社の Tailscale 上の自分のアカウントへマシン共有 | Mac Mini をインターネットに公開せず、他の社員からも見えない |
-| 物理表示灯 | M5Stack（PlatformIO） | WebSocket で状態を受けて LED を点灯 |
+| 物理表示灯 | M5Stack（PlatformIO） | WebSocket で状態を受けて LED を点灯。**変更**：Atom Matrix を USB シリアルでつなぎ、arduino-cli で書き込む |
 
 Mac Mini は個人の Tailscale に参加させ、マシン共有で会社の Tailscale 上の自分のアカウントにだけ公開します。共有されたマシンは受け取った本人にしか見えず、他の社員からは見えません。共有マシンは自分から接続を始められませんが、本構成の通信はすべて PC 側から始まるため影響はありません。共有マシンはタグ付き端末からはアクセスできませんが、会社の PC はタグ管理されておらず、ユーザー所有の端末であることを確認済みです。
 
@@ -103,7 +106,7 @@ Mac Mini は個人の Tailscale に参加させ、マシン共有で会社の Ta
 | events | event_id, session_id, player_id, type, tool_name, payload_json, created_at | 履歴、進捗、作業結果 |
 | prompts | prompt_id, session_id, text, origin（local / dashboard）, created_at | 直近のプロンプト |
 | usage_snapshots | taken_at, host_id, five_hour_pct, five_hour_reset, seven_day_pct, seven_day_reset | 利用枠の行と上限予測 |
-| token_usage | session_id, ts, input_tokens, output_tokens | 消費内訳 |
+| token_usage | session_id, ts, input_tokens, output_tokens | 消費内訳。**変更**：session_costs（statusLine の費用）と transcript_costs（会話記録からの見積もり、10分刻み）にした |
 | file_touches | session_id, player_id, path, ts | ファイル競合の検知 |
 | alerts | alert_id, kind（danger / conflict / idle / offline）, session_id, detail_json, state, created_at | アラート欄 |
 | outbox | command_id, session_id, text, state（queued / delivered / acked）, created_at | 指示の送信キュー |
@@ -161,7 +164,7 @@ statusLine スクリプトは、端末に1行を表示しつつ、受け取っ�
 | POST | /api/outbox/:commandId/ack | 指示の受領 |
 | POST | /api/sessions/:id/prompt | 画面からの指示登録 |
 | WS | /ws | 画面へのリアルタイム配信 |
-| WS | /ws/device | 物理表示灯への配信 |
+| WS | /ws/device | 物理表示灯への配信。**変更**：USB シリアルにしたため作らない |
 
 ## 状態判定ロジック
 
@@ -181,7 +184,7 @@ statusLine スクリプトは、端末に1行を表示しつつ、受け取っ�
 
 - **危険操作の「許可して再実行」**：画面で許可すると、一度だけ有効な許可トークンを発行します。あわせて Channel 経由で「承認済みのため再実行してよい」と伝え、次の PreToolUse で通します。**変更**：Channel が使えないため、Claude Code の許可ダイアログに回す方式にしました（冒頭の「進捗と計画の変更」を参照）。
 - **上限到達の予測**：直近 30 分の usage_snapshots から増加ペースを直線で近似し、100% に達する時刻を出します。公式の計算方法は非公開のため、目安として表示します。
-- **消費内訳**：利用枠の割合はセッション別には取得できません。推測ですが、OTel のトークン数をセッション別に集計し、その比率で按分するのが現実的です。
+- **消費内訳**：利用枠の割合はセッション別には取得できません。推測ですが、OTel のトークン数をセッション別に集計し、その比率で按分するのが現実的です。**変更**：statusLine の費用と会話記録からの見積もりを使いました（冒頭の「進捗と計画の変更」を参照）。
 - **Codex CLI の検知**：推測ですが、Bash で実行されたコマンドが `codex` で始まるもの、またはツール名に codex を含む MCP ツールを、Codex のプレイヤーとして扱います。
 - **プレイヤーのモデル**：hooks で取得できるかは未確認です。取得できない場合は、サブエージェント定義ファイルのモデル指定と突き合わせます。
 
@@ -195,7 +198,7 @@ statusLine スクリプトは、端末に1行を表示しつつ、受け取っ�
 | PC からの送信 | PC ごとに API トークンを発行し、受信 API で検証する |
 | 画面へのアクセス | Tailscale の端末認証に加え、画面にもパスキー等のログインを設ける |
 | 指示の送信 | Channel 側でもトークンと送信元を検証する。送信内容はすべて outbox と events に記録 |
-| 物理表示灯 | 専用トークンで受信のみ許可し、状態以外の情報は送らない |
+| 物理表示灯 | 専用トークンで受信のみ許可し、状態以外の情報は送らない。**変更**：USB シリアルにしたため、ネットワークの口もトークンも不要。送るのは状態の種類だけ |
 | 機密情報 | プロンプトやコマンド内のトークン・パスワードらしい文字列を保存前に伏せ字化する |
 | 保存データ | Mac Mini のディスク暗号化（FileVault）を有効にし、保持期間を定める |
 
