@@ -27,7 +27,7 @@ export function App() {
             </p>
           ) : (
             <div className="host-grid">
-              {state.hosts.map((h) => (
+              {[...state.hosts.filter((h) => h.lastSeenAt), ...state.hosts.filter((h) => !h.lastSeenAt)].map((h) => (
                 <HostCard key={h.hostId} host={h} now={now} selected={selected} onSelect={setSelected} />
               ))}
             </div>
@@ -55,7 +55,7 @@ function Header({ state, conn, updatedAt }: { state: StateSnapshot | null; conn:
         <div>
           <h1>Claude 管制室</h1>
           <div className="brand-sub">
-            {state ? `${state.hosts.length}台のPCを監視中` : "接続中"} ・ 最終更新{" "}
+            {state ? `${state.hosts.filter((h) => h.lastSeenAt).length}台のPCを監視中` : "接続中"} ・ 最終更新{" "}
             <span className="mono">{updatedAt ? formatDateTime(updatedAt) : "—"}</span>
             {conn !== "open" && (
               <span className="conn-warn" role="status">
@@ -97,6 +97,23 @@ function HostCard({
   onSelect: (id: string) => void;
 }) {
   const sub = [host.os, host.hostname !== host.label ? host.hostname : null].filter(Boolean).join(" ・ ");
+  // トークンを発行しただけで、まだ一度もデータが届いていない PC
+  if (!host.lastSeenAt) {
+    return (
+      <div className="host panel host-pending">
+        <div className="host-head">
+          <div className="host-id">
+            <PcIcon />
+            <div>
+              <div className="host-name mono">{host.label}</div>
+              <div className="host-sub">トークン発行済み ・ エージェント未設定</div>
+            </div>
+          </div>
+          <span className="pending-badge">未接続</span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="host panel">
       <div className="host-head">

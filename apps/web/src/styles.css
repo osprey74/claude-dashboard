@@ -105,3 +105,8 @@ h1, h2 { margin: 0; }
 .footer a:hover { color: #b5e8f2; }
 .logout { margin-left: auto; }
 .logout button { font: inherit; font-size: 12px; color: var(--sub); background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 12px; min-height: 32px; cursor: pointer; }
+
+/* トークン発行済み・未接続の PC */
+.host-pending { border-style: dashed; border-color: #4a5870; background: transparent; }
+.host-pending .host-name { color: var(--sub2); }
+.pending-badge { font-size: 11px; color: var(--sub); border: 1px dashed #4a5870; border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
