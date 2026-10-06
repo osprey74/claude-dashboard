@@ -32,11 +32,14 @@ export function AlertList({
   alerts,
   now,
   idleMin,
+  canOpen,
   onSelect,
 }: {
   alerts: AlertView[];
   now: Date;
   idleMin: number;
+  /** 一覧にあるセッションか（終了・一覧から外れたものは詳細を開けない） */
+  canOpen: (sessionId: string) => boolean;
   onSelect: (sessionId: string) => void;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
@@ -96,7 +99,7 @@ export function AlertList({
                   Remote Control で応答
                 </a>
               )}
-              {a.sessionId && (
+              {a.sessionId && canOpen(a.sessionId) && (
                 <button type="button" className="alert-btn" onClick={() => onSelect(a.sessionId!)}>
                   詳細
                 </button>

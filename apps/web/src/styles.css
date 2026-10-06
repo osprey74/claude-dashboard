@@ -276,3 +276,6 @@ h1, h2 { margin: 0; }
 .alert-outcome { display: inline-block; margin-left: 8px; font-size: 11px; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; color: var(--sub2); }
 .alert-outcome.outcome-pending { color: var(--wait); border-color: var(--wait); }
 .alert-outcome.outcome-executed { color: var(--err); border-color: var(--err); }
+@keyframes detail-flash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
+.detail.flash { animation: detail-flash 1.2s ease-out; }
+@media (prefers-reduced-motion: reduce) { .detail.flash { animation: none; } }

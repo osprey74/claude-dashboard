@@ -66,7 +66,24 @@ export function App() {
   const selectedSession = findSession(state, route.selected);
   const version = state?.generatedAt ?? "";
   const alerts = (
-    <AlertList alerts={state?.alerts ?? []} now={now} idleMin={state?.ui?.idleAlertMin ?? 10} onSelect={route.select} />
+    <AlertList
+      alerts={state?.alerts ?? []}
+      now={now}
+      idleMin={state?.ui?.idleAlertMin ?? 10}
+      canOpen={(id) => findSession(state, id) !== null}
+      onSelect={(id) => {
+        route.select(id);
+        // すでに選んでいるセッションでも分かるよう、詳細パネルまでスクロールして一瞬光らせる
+        setTimeout(() => {
+          const el = document.querySelector<HTMLElement>(".detail:not(.detail-empty)");
+          if (!el) return;
+          el.scrollIntoView({ behavior: "smooth", block: "start" });
+          el.classList.remove("flash");
+          void el.offsetWidth;
+          el.classList.add("flash");
+        }, 50);
+      }}
+    />
   );
 
   const hosts = !state ? (
