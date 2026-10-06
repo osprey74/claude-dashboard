@@ -16,7 +16,8 @@ import {
   verifySessionCookieValue,
   type HostRow,
 } from "./auth";
-import { dismissAlert, evaluateAlerts } from "./alerts";
+import { alertPushMessage, dismissAlert, evaluateAlerts, openAlerts } from "./alerts";
+import { deleteSubscription, saveSubscription, sendPush } from "./push";
 import { DB_PATH, loadConfig } from "./config";
 import { openDb } from "./db";
 import { lastStatusline, processHook, processStatusline } from "./ingest";
@@ -36,7 +37,13 @@ let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
 function broadcastIfChanged(): void {
   try {
-    evaluateAlerts(db, cfg);
+    const { opened } = evaluateAlerts(db, cfg);
+    if (opened.length > 0) {
+      const idleMin = Math.round(cfg.thresholds.idleAlertSec / 60);
+      for (const a of openAlerts(db).filter((v) => opened.includes(v.alertId))) {
+        void sendPush(db, cfg, alertPushMessage(a, idleMin)).catch((e) => console.error("[push] failed", e));
+      }
+    }
   } catch (e) {
     console.error("[alerts] evaluate failed", e);
   }
@@ -141,8 +148,12 @@ app.post("/logout", (c) => {
 const isLoggedIn = (cookieHeader: string | null | undefined) =>
   verifySessionCookieValue(cfg, readCookie(cookieHeader, SESSION_COOKIE));
 
+// ホーム画面への追加（PWA）に使うファイルは、ログイン前でも取れるようにする（機密を含まない）
+const PUBLIC_PATHS = /^\/(manifest\.webmanifest|sw\.js|icons\/icon-\d+\.png)$/;
+
 app.use("*", async (c, next) => {
   if (isLoggedIn(c.req.header("Cookie"))) return next();
+  if (PUBLIC_PATHS.test(c.req.path)) return next();
   if (c.req.path.startsWith("/api/")) return c.json({ error: "unauthorized" }, 401);
   return c.redirect("/login", 302);
 });
@@ -155,6 +166,26 @@ app.post("/api/alerts/:id/dismiss", (c) => {
   const ok = dismissAlert(db, id);
   if (ok) scheduleBroadcast();
   return c.json({ ok });
+});
+
+// Web Push：端末ごとの購読
+app.get("/api/push/key", (c) => c.json({ publicKey: cfg.vapid.publicKey }));
+app.post("/api/push/subscribe", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { subscription?: Record<string, unknown> };
+  const origin = c.req.header("Origin") ?? "";
+  const ok = saveSubscription(db, body.subscription ?? {}, origin, c.req.header("User-Agent"));
+  return ok ? c.json({ ok }) : c.json({ error: "bad subscription" }, 400);
+});
+app.post("/api/push/unsubscribe", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { endpoint?: unknown };
+  if (typeof body.endpoint === "string") deleteSubscription(db, body.endpoint);
+  return c.json({ ok: true });
+});
+app.post("/api/push/test", async (c) => {
+  const body = (await c.req.json().catch(() => ({}))) as { endpoint?: unknown };
+  if (typeof body.endpoint !== "string") return c.json({ error: "endpoint required" }, 400);
+  const sent = await sendPush(db, cfg, { title: "Claude 管制室", body: "通知のテストです。この端末で通知を受け取れます。", url: "/", tag: "test" }, body.endpoint);
+  return c.json({ ok: sent > 0 });
 });
 
 app.get("/api/sessions/:id", (c) => {

@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "@kanseishitsu/shared": "workspace:*",
-    "hono": "^4.13.13"
+    "hono": "^4.13.13",
+    "web-push": "^3.6"
+  },
+  "devDependencies": {
+    "@types/web-push": "^3.6.4"
   }
 }

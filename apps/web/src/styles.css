@@ -266,3 +266,10 @@ h1, h2 { margin: 0; }
   .alert-actions { justify-content: flex-start; }
   .alert-btn { min-height: 40px; }
 }
+
+/* 通知（Web Push） */
+.push { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.push-btn { font: inherit; font-size: 12px; color: var(--accent); background: transparent; border: 1px solid var(--accent); border-radius: 8px; padding: 0 12px; min-height: 36px; cursor: pointer; }
+.push-btn:disabled { opacity: 0.5; cursor: default; }
+.push-on { font-size: 12px; color: var(--run); font-weight: 700; }
+.push-note { font-size: 12px; color: var(--sub); }

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from "n
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import webpush from "web-push";
 import { DEFAULT_THRESHOLDS, type StatusThresholds } from "@kanseishitsu/shared";
 
 export interface ServerConfig {
@@ -27,6 +28,8 @@ export interface ServerConfig {
   sessionSecret: string;
   /** ログイン状態の有効期間（日） */
   sessionDays: number;
+  /** Web Push の署名鍵（初回起動時に生成） */
+  vapid: { publicKey: string; privateKey: string };
 }
 
 export const DATA_DIR =
@@ -34,7 +37,7 @@ export const DATA_DIR =
 export const CONFIG_PATH = join(DATA_DIR, "config.json");
 export const DB_PATH = join(DATA_DIR, "kanseishitsu.db");
 
-const DEFAULTS: Omit<ServerConfig, "sessionSecret"> = {
+const DEFAULTS: Omit<ServerConfig, "sessionSecret" | "vapid"> = {
   host: "127.0.0.1",
   port: 8790,
   thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
@@ -51,8 +54,9 @@ export function loadConfig(): ServerConfig {
     ...file,
     thresholds: { ...DEFAULTS.thresholds, ...(file.thresholds ?? {}) },
     sessionSecret: file.sessionSecret ?? randomBytes(32).toString("base64url"),
+    vapid: file.vapid?.publicKey && file.vapid?.privateKey ? file.vapid : webpush.generateVAPIDKeys(),
   };
-  if (!existsSync(CONFIG_PATH) || !file.sessionSecret) saveConfig(cfg);
+  if (!existsSync(CONFIG_PATH) || !file.sessionSecret || !file.vapid) saveConfig(cfg);
   if (process.env.KANSEI_PORT) cfg.port = Number(process.env.KANSEI_PORT);
   return cfg;
 }

@@ -5,6 +5,7 @@ import { DetailPanel } from "./Detail";
 import { History } from "./History";
 import { HostGrid } from "./Hosts";
 import { Indicator, LogoIcon } from "./Icons";
+import { PushToggle } from "./Push";
 import { UsageRow } from "./Usage";
 import { formatDateTime } from "./format";
 import { useLiveState, useNow, type Conn } from "./useLiveState";
@@ -195,6 +196,7 @@ function Footer() {
       PC 側エージェント：
       <a href="/downloads/kanseishitsu-agent-windows-x64.exe">Windows（x64）</a> ・
       <a href="/downloads/kanseishitsu-agent-macos-arm64">macOS（arm64）</a>
+      <PushToggle />
       <form method="post" action="/logout" className="logout">
         <button type="submit">ログアウト</button>
       </form>

@@ -103,13 +103,14 @@ function conflictAlerts(db: Database, cfg: ServerConfig, now: Date): Wanted[] {
 }
 
 /**
- * アラートを評価し直す。変化があれば true を返す（配信のきっかけにする）。
- * 古い編集記録もここで消す
+ * アラートを評価し直す。変化があれば changed、新しく出したアラートの ID を opened で返す
+ * （配信とプッシュ通知のきっかけにする）。古い編集記録もここで消す
  */
-export function evaluateAlerts(db: Database, cfg: ServerConfig, now = new Date()): boolean {
+export function evaluateAlerts(db: Database, cfg: ServerConfig, now = new Date()): { changed: boolean; opened: number[] } {
   const at = now.toISOString();
   const wanted = [...idleAlerts(db, cfg, now), ...conflictAlerts(db, cfg, now)];
   let changed = false;
+  const opened: number[] = [];
   db.transaction(() => {
     const active = db
       .query<{ alert_id: number; key: string; state: string; detail_json: string }, []>(
@@ -122,10 +123,13 @@ export function evaluateAlerts(db: Database, cfg: ServerConfig, now = new Date()
       const json = JSON.stringify(w.detail);
       const cur = byKey.get(w.key);
       if (!cur) {
-        db.query(
-          `INSERT INTO alerts (key, kind, host_id, session_id, detail_json, state, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
-        ).run(w.key, w.kind, w.hostId, w.sessionId, json, at, at);
+        const r = db
+          .query(
+            `INSERT INTO alerts (key, kind, host_id, session_id, detail_json, state, created_at, updated_at)
+             VALUES (?, ?, ?, ?, ?, 'open', ?, ?)`,
+          )
+          .run(w.key, w.kind, w.hostId, w.sessionId, json, at, at);
+        opened.push(Number(r.lastInsertRowid));
         changed = true;
       } else if (cur.detail_json !== json) {
         db.query("UPDATE alerts SET detail_json = ?, session_id = ?, updated_at = ? WHERE alert_id = ?").run(
@@ -145,7 +149,19 @@ export function evaluateAlerts(db: Database, cfg: ServerConfig, now = new Date()
     // 競合の判定に要らなくなった編集記録は消す（1日分は残す）
     db.query("DELETE FROM file_touches WHERE created_at < ?").run(new Date(now.getTime() - 86400_000).toISOString());
   })();
-  return changed;
+  return { changed, opened };
+}
+
+/** プッシュ通知の文面。押すとそのセッションの詳細を開く */
+export function alertPushMessage(a: AlertView, idleMin: number): { title: string; body: string; url: string; tag: string } {
+  const where = `${a.hostLabel}${a.project ? " / " + a.project : ""}`;
+  const url = a.sessionId ? `/#s=${encodeURIComponent(a.sessionId)}` : "/";
+  if (a.kind === "idle") {
+    const what = a.waitText?.split(" ・ ")[0] ?? "応答待ち";
+    return { title: "放置アラート", body: `${where} の${what}が ${idleMin}分以上続いています`, url, tag: `alert-${a.alertId}` };
+  }
+  const file = (a.path ?? "").split(/[\\/]/).pop() ?? "";
+  return { title: "ファイル競合", body: `${where} で ${file} を複数の担当が編集しています`, url, tag: `alert-${a.alertId}` };
 }
 
 export function dismissAlert(db: Database, alertId: number, now = new Date()): boolean {

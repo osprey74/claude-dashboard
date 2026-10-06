@@ -13,6 +13,7 @@ const cfg: ServerConfig = {
   passwordHash: null,
   sessionSecret: "x",
   sessionDays: 1,
+  vapid: { publicKey: "x", privateKey: "x" },
 };
 
 function setup() {
@@ -35,13 +36,13 @@ describe("放置アラート", () => {
     send("UserPromptSubmit", { prompt: "x" });
     send("PermissionRequest", { tool_name: "Bash" });
     advance(599);
-    expect(evaluate()).toBe(false);
+    expect(evaluate()).toEqual({ changed: false, opened: [] });
     advance(2);
-    expect(evaluate()).toBe(true);
+    expect(evaluate().opened.length).toBe(1);
     const [a] = openAlerts(db);
     expect(a).toMatchObject({ kind: "idle", hostLabel: "office-win", project: "group-schedule", waitText: "許可待ち ・ Bash" });
     send("PostToolUse", { tool_name: "Bash", tool_use_id: "t1" });
-    expect(evaluate()).toBe(true);
+    expect(evaluate()).toEqual({ changed: true, opened: [] });
     expect(openAlerts(db)).toEqual([]);
   });
 
