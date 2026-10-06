@@ -101,6 +101,22 @@ describe("isCodexCall", () => {
     expect(bash("cat >> t.ts <<'EOF'\n  bash(\"& codex.exe exec 'x'\")\ncodex exec y\nEOF\nbun test")).toBe(false);
     expect(bash("cat > p.txt <<EOF\nhello\nEOF\ncodex exec 'after heredoc'")).toBe(true);
   });
+  test("変数やフルパスでの起動も検知する", () => {
+    // 実際に home-desktop で使われた形（VS Code の拡張機能の codex.exe を変数に入れて起動）
+    const real =
+      'cd "G:/novel/x"; mkdir -p notes/codex .claude/codex/logs; C=$(ls -t /c/Users/*/.vscode/extensions/openai.chatgpt-*/bin/windows-x86_64/codex.exe 2>/dev/null | head -1); [ -z "$C" ] && C=$(command -v codex); echo "$C"; OUT="notes/codex/V3.md"; "$C" exec -C "$ROOT" -s read-only -m gpt-5.5 -o "$OUT" "レビューして; 報告して" < /dev/null > log 2>&1; echo "rc=$?"';
+    expect(bash(real)).toBe(true);
+    expect(codexModel("Bash", { command: real })).toBe("gpt-5.5");
+    expect(bash("/c/Users/a/.vscode/extensions/openai.chatgpt-1/bin/codex.exe exec 'x'")).toBe(true);
+    expect(bash('"C:/Program Files/Codex/codex.exe" exec "x"')).toBe(true);
+    expect(isCodexCall("PowerShell", { command: '$c = (Get-Command codex).Source; & $c exec "x"' })).toBe(true);
+  });
+  test("版・使い方の表示と、フォルダ名に codex を含むだけの引数は数えない", () => {
+    expect(bash('which codex; codex --version 2>&1 | head -2; cat .claude/codex/runner.sh')).toBe(false);
+    expect(bash("codex --help")).toBe(false);
+    expect(bash("mkdir -p notes/codex .claude/codex/logs")).toBe(false);
+    expect(bash('OUT="notes/codex/a.md"; cat "$OUT"')).toBe(false);
+  });
 });
 
 describe("todosFromInput", () => {

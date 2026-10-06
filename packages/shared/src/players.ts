@@ -7,16 +7,53 @@ export type PlayerStatus = "run" | "done" | "err";
 export const AGENT_TOOLS = new Set(["Agent", "Task"]);
 const SHELL_TOOLS = new Set(["Bash", "PowerShell"]);
 
-// コマンドの先頭（または ; & | ( $( の直後）で codex が呼ばれているか。環境変数の前置きと npx 経由も含める
-const CODEX_COMMAND =
-  /(?:^|[;&|(]|\$\()\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:npx\s+(?:-y\s+)?@openai\/)?codex(?:\.exe|\.cmd)?(?=\s|$)/m;
-
 // ヒアドキュメントの本文と、引用符で囲まれた文字列（ファイルに書き込む内容やメッセージ）は判定の対象外にする
 const HEREDOC = /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[^\n]*\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g;
 const QUOTED = /'[^']*'|"(?:\\.|[^"\\])*"/g;
 
 export function stripQuoted(command: string): string {
   return command.replace(HEREDOC, "").replace(QUOTED, "''");
+}
+
+// コマンドの先頭（または ; & | ( $( 改行の直後）で codex が呼ばれているか。
+// 環境変数の前置き、npx 経由、フルパス（/c/…/codex.exe など）も含める
+const CODEX_INVOCATION =
+  /(?:^|[;&|(\n]|\$\()\s*(?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*(?:npx\s+(?:-y\s+)?@openai\/)?(?:[^\s;&|()'"]*[\\/])?codex(?:\.exe|\.cmd)?(?=\s|$)/g;
+/** 版や使い方の表示だけの呼び出しは、作業として数えない */
+const INFO_ONLY = /^\s*(?:--version|-V|--help|-h|help)\s*$/;
+
+/**
+ * 実行ファイルの場所を変数に入れてから起動する書き方（C=$(… codex.exe …); "$C" exec …）と、
+ * 引用符で囲んだパスでの起動（"C:/…/codex.exe" exec …）を、ただの codex に置き換える
+ */
+function normalizeCodex(command: string): string {
+  const body = command.replace(HEREDOC, "");
+  const vars = new Set<string>();
+  // bash：NAME=… / PowerShell：$NAME = …（値に codex.exe などを含むもの）
+  for (const m of body.matchAll(/(?:^|[;&|(\s])\$?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*[^;&|\n]*?(?:[\\/]|\b)codex(?:\.exe|\.cmd)?\b/g)) vars.add(m[1]!);
+  let out = body;
+  if (vars.size > 0) {
+    const names = [...vars].join("|");
+    out = out.replace(new RegExp(`"?\\$(?:\\{(?:${names})\\}|(?:${names})\\b)"?`, "g"), " codex ");
+  }
+  return out.replace(/"[^"\n]*[\\/]codex(?:\.exe|\.cmd)?"|'[^'\n]*[\\/]codex(?:\.exe|\.cmd)?'/g, " codex ");
+}
+
+/** codex の起動ごとの引数（次の ; & | 改行まで）。引用符の中身を含めたものを返す */
+function codexInvocations(command: string): string[] {
+  const norm = normalizeCodex(command);
+  const view = norm.replace(QUOTED, (q) => "\u0000".repeat(q.length));
+  const out: string[] = [];
+  for (const m of view.matchAll(CODEX_INVOCATION)) {
+    const from = m.index! + m[0].length;
+    const restView = view.slice(from);
+    const len = restView.search(/[;&|\n]/);
+    const args = norm.slice(from, len < 0 ? undefined : from + len);
+    // 2>&1 などのつなぎ替えは除いてから見る
+    if (INFO_ONLY.test(args.replace(/\u0000/g, "").replace(/\s*\d*[<>]+\S*/g, ""))) continue;
+    out.push(args);
+  }
+  return out;
 }
 
 /** ツール呼び出しが Codex CLI の起動かどうか */
@@ -26,25 +63,21 @@ export function isCodexCall(toolName: string | undefined, toolInput: Record<stri
   if (toolName.startsWith("mcp__") && /codex/i.test(toolName)) return true;
   if (!SHELL_TOOLS.has(toolName)) return false;
   const cmd = toolInput?.command;
-  return typeof cmd === "string" && CODEX_COMMAND.test(stripQuoted(cmd));
+  return typeof cmd === "string" && codexInvocations(cmd).length > 0;
 }
 
 // codex のモデル指定：-m・--model（空白または = 区切り）と、-c model=…（設定の上書き）
 const CODEX_MODEL = /(?:^|\s)(?:(?:-m|--model)(?:\s+|=)|-c\s+['"]?model=)(['"]?)([A-Za-z0-9][\w.:/-]*)\1?/;
 
-/**
- * Codex の起動で指定されたモデル。指定がなければ null（Codex 側の設定ファイルの既定値はここからは分からない）。
- * Codex 以外の引数を拾わないよう、コマンド内で codex が現れた位置より後ろだけを見る
- */
+/** Codex の起動で指定されたモデル。指定がなければ null（Codex 側の設定ファイルの既定値はここからは分からない） */
 export function codexModel(toolName: string | undefined, toolInput: Record<string, unknown> | undefined): string | null {
   if (!isCodexCall(toolName, toolInput)) return null;
   if (toolName!.startsWith("mcp__")) return typeof toolInput?.model === "string" && toolInput.model ? toolInput.model : null;
-  const cmd = toolInput!.command as string;
-  const at = cmd.search(/codex(?:\.exe|\.cmd)?(?=\s|$)/);
-  if (at < 0) return null;
-  // 同じ行の、次の ; & | までを codex の引数とみなす
-  const args = cmd.slice(at).split(/[;&|\n]/)[0]!;
-  return args.match(CODEX_MODEL)?.[2] ?? null;
+  for (const args of codexInvocations(toolInput!.command as string)) {
+    const m = args.match(CODEX_MODEL)?.[2];
+    if (m) return m;
+  }
+  return null;
 }
 
 export interface TodoItem {
