@@ -3,6 +3,7 @@
 import type { Database } from "bun:sqlite";
 import {
   AGENT_TOOLS,
+  codexModel,
   isCodexCall,
   modelLabel,
   todosFromInput,
@@ -176,9 +177,9 @@ function trackDetails(db: Database, sessionId: string, event: string, payload: R
       } else if (isCodexCall(tool, input)) {
         const task = str(input?.description) ?? clip(str(input?.command) ?? str(input?.prompt) ?? "", 80);
         db.query(
-          `INSERT OR IGNORE INTO players (player_id, session_id, kind, task, background, status, started_at)
-           VALUES (?, ?, 'codex', ?, ?, 'run', ?)`,
-        ).run(toolUseId, sessionId, task || null, input?.run_in_background === true ? 1 : 0, at);
+          `INSERT OR IGNORE INTO players (player_id, session_id, kind, model, task, background, status, started_at)
+           VALUES (?, ?, 'codex', ?, ?, ?, 'run', ?)`,
+        ).run(toolUseId, sessionId, codexModel(tool, input), task || null, input?.run_in_background === true ? 1 : 0, at);
       }
       return;
     }

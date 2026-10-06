@@ -28,7 +28,7 @@ export function CtxGauge({ pct, warnPct, large }: { pct: number | null; warnPct:
 export const PLAYER_STATE: Record<PlayerView["status"], string> = { run: "稼働中", done: "完了", err: "失敗" };
 
 export function playerLabel(p: PlayerView): string {
-  if (p.kind === "codex") return "Codex CLI";
+  if (p.kind === "codex") return p.model ? `Codex CLI ・ ${p.model}` : "Codex CLI";
   return p.model ?? p.agentType ?? "サブエージェント";
 }
 

@@ -29,6 +29,24 @@ export function isCodexCall(toolName: string | undefined, toolInput: Record<stri
   return typeof cmd === "string" && CODEX_COMMAND.test(stripQuoted(cmd));
 }
 
+// codex のモデル指定：-m・--model（空白または = 区切り）と、-c model=…（設定の上書き）
+const CODEX_MODEL = /(?:^|\s)(?:(?:-m|--model)(?:\s+|=)|-c\s+['"]?model=)(['"]?)([A-Za-z0-9][\w.:/-]*)\1?/;
+
+/**
+ * Codex の起動で指定されたモデル。指定がなければ null（Codex 側の設定ファイルの既定値はここからは分からない）。
+ * Codex 以外の引数を拾わないよう、コマンド内で codex が現れた位置より後ろだけを見る
+ */
+export function codexModel(toolName: string | undefined, toolInput: Record<string, unknown> | undefined): string | null {
+  if (!isCodexCall(toolName, toolInput)) return null;
+  if (toolName!.startsWith("mcp__")) return typeof toolInput?.model === "string" && toolInput.model ? toolInput.model : null;
+  const cmd = toolInput!.command as string;
+  const at = cmd.search(/codex(?:\.exe|\.cmd)?(?=\s|$)/);
+  if (at < 0) return null;
+  // 同じ行の、次の ; & | までを codex の引数とみなす
+  const args = cmd.slice(at).split(/[;&|\n]/)[0]!;
+  return args.match(CODEX_MODEL)?.[2] ?? null;
+}
+
 export interface TodoItem {
   label: string;
   status: "done" | "active" | "todo";

@@ -78,7 +78,7 @@ describe("redactText", () => {
   });
 });
 
-import { isCodexCall, todosFromInput } from "./index";
+import { codexModel, isCodexCall, todosFromInput } from "./index";
 
 describe("isCodexCall", () => {
   const bash = (command: string) => isCodexCall("Bash", { command });
@@ -110,5 +110,27 @@ describe("todosFromInput", () => {
       { label: "b", status: "todo" },
     ]);
     expect(todosFromInput({})).toBeNull();
+  });
+});
+
+describe("codexModel", () => {
+  const bash = (command: string) => codexModel("Bash", { command });
+  test("-m・--model・-c model= から読む", () => {
+    expect(bash('codex exec -m gpt-5.5 "x"')).toBe("gpt-5.5");
+    expect(bash("codex --model=o4-mini exec 'x'")).toBe("o4-mini");
+    expect(bash('PATH=/x:$PATH codex exec --model "gpt-5-codex" "x"')).toBe("gpt-5-codex");
+    expect(bash("codex -c model=gpt-5.5 exec 'x'")).toBe("gpt-5.5");
+    expect(bash(`codex -c 'model="gpt-5.5"' exec x`)).toBe("gpt-5.5");
+    expect(codexModel("PowerShell", { command: "& codex.exe exec -m gpt-5.5 'x'" })).toBe("gpt-5.5");
+  });
+  test("指定がない・Codex 以外の引数・Codex でないときは null", () => {
+    expect(bash('codex exec "x"')).toBeNull();
+    expect(bash('grep -m 1 foo a.txt && codex exec "x"')).toBeNull();
+    expect(bash('codex exec "x"; python -m http.server')).toBeNull();
+    expect(bash("python -m gpt-5.5")).toBeNull();
+  });
+  test("MCP 経由は入力の model を使う", () => {
+    expect(codexModel("mcp__codex__codex", { prompt: "x", model: "gpt-5.5" })).toBe("gpt-5.5");
+    expect(codexModel("mcp__codex__codex", { prompt: "x" })).toBeNull();
   });
 });
