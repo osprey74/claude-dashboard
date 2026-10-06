@@ -19,6 +19,7 @@ import {
 import { alertPushMessage, dismissAlert, evaluateAlerts, openAlerts } from "./alerts";
 import { deleteSubscription, saveSubscription, sendPush } from "./push";
 import { DB_PATH, loadConfig } from "./config";
+import { DeviceLink, deviceLevel } from "./device";
 import { openDb } from "./db";
 import { lastStatusline, processHook, processStatusline } from "./ingest";
 import { loginPage } from "./login-page";
@@ -34,6 +35,9 @@ const WEB_DIST = join(import.meta.dir, "..", "..", "web", "dist");
 let server: ReturnType<typeof Bun.serve> | null = null;
 let lastKey = "";
 let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+const device = cfg.device?.enabled === false ? null : new DeviceLink(cfg.device?.serialPath);
+// 表示灯は 45 秒届かないと「途切れた」表示にするため、変化がなくても 10 秒ごとに送る
+setInterval(() => device?.update(deviceLevel(buildSnapshot(db, cfg))), 10_000);
 
 function broadcastIfChanged(): void {
   try {
@@ -48,6 +52,7 @@ function broadcastIfChanged(): void {
     console.error("[alerts] evaluate failed", e);
   }
   const state = buildSnapshot(db, cfg);
+  device?.update(deviceLevel(state));
   const key = snapshotKey(state);
   if (key === lastKey) return;
   lastKey = key;

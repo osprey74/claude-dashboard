@@ -28,6 +28,8 @@ export interface ServerConfig {
   sessionSecret: string;
   /** ログイン状態の有効期間（日） */
   sessionDays: number;
+  /** 物理表示灯（USB シリアル）。serialPath がなければ /dev/cu.usbserial-* が1つだけのときに自動で使う。enabled: false で止める */
+  device?: { enabled?: boolean; serialPath?: string };
   /** Web Push の署名鍵（初回起動時に生成） */
   vapid: { publicKey: string; privateKey: string };
 }

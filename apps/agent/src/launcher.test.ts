@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { LAUNCHER_NAME, LAUNCHER_SH, MAX_RUNNING } from "./launcher";
@@ -71,7 +71,9 @@ describe.skipIf(process.platform === "win32")("起動役", () => {
       const r = await run(dir, ["hook", "Stop"], '{"a":1}');
       expect(r.code).toBe(0);
       expect(r.ms).toBeLessThan(1000);
-      await Bun.sleep(300);
+      // 切り離したエージェントが書き終わるのを待つ（負荷が高いと遅れるため、最大3秒）
+      for (let i = 0; i < 60 && !existsSync(join(dir, "got.txt")); i++) await Bun.sleep(50);
+      await Bun.sleep(50);
       expect(readFileSync(join(dir, "got.txt"), "utf8")).toBe('{"a":1}');
     } finally {
       rmSync(dir, { recursive: true, force: true });
