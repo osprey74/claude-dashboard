@@ -123,7 +123,9 @@ export async function setup(argv: string[]): Promise<void> {
   const prev = loadConfig();
 
   console.log("Claude 管制室 エージェントの設定\n");
+  // 対話で聞かない項目（guardMode・timeoutMs など）は、今の設定ファイルの値を残す
   const cfg: AgentConfig = {
+    ...prev,
     serverUrl: ask("サーバーの URL（例 https://home-mac-mini.xxxx.ts.net:8443）", prev?.serverUrl),
     token: ask("この PC 用のトークン（Mac Mini の cli.ts add-host で発行）", prev?.token),
     hostLabel: ask("この PC の表示名（例 office-win）", prev?.hostLabel),
