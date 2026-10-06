@@ -59,6 +59,12 @@ h1, h2 { margin: 0; }
 .host-sub { overflow-wrap: anywhere; }
 .old-agent { color: #f8dc92; }
 .host-empty { margin: 0; font-size: 13px; color: var(--sub); padding: 4px 2px; }
+.host-toggle { cursor: pointer; user-select: none; -webkit-user-select: none; touch-action: manipulation; border-radius: 6px; }
+.host-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.host-chevron { flex: none; color: var(--sub); transition: transform 0.15s; }
+.host-collapsed .host-chevron { transform: rotate(-90deg); }
+.host-summary { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 13px; color: var(--sub); padding: 0 2px; }
+.host-summary-item { display: inline-flex; align-items: center; gap: 5px; }
 
 .tile {
   font: inherit; text-align: left; cursor: pointer; display: flex; flex-direction: column; gap: 8px; width: 100%;

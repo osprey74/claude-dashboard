@@ -1,6 +1,7 @@
 // PC カードとセッションタイル
 
-import type { HostView, SessionView } from "@kanseishitsu/shared";
+import { useState, type KeyboardEvent, type MouseEvent } from "react";
+import type { HostView, SessionStatus, SessionView } from "@kanseishitsu/shared";
 import { ConductorIcon, CtxGauge, ModelChip, PlayerChip } from "./parts";
 import { Indicator, PcIcon } from "./Icons";
 import { STATUS_LABEL, ago } from "./format";
@@ -13,18 +14,80 @@ interface Props {
   onSelect: (id: string) => void;
 }
 
+/** たたんだ PC の一覧は、見ている人のブラウザにだけ覚えておく */
+const COLLAPSED_KEY = "kanseishitsu.collapsedHosts";
+
+function loadCollapsed(): Set<string> {
+  try {
+    const v = JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]");
+    return new Set(Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
+  } catch {
+    return new Set();
+  }
+}
+
 export function HostGrid({ hosts, now, warnPct, selected, onSelect }: Props) {
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const toggle = (hostId: string) =>
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (!next.delete(hostId)) next.add(hostId);
+      try {
+        localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next]));
+      } catch {
+        // 保存できなくても、この画面の間はたたんだままにする
+      }
+      return next;
+    });
   const ordered = [...hosts.filter((h) => h.lastSeenAt), ...hosts.filter((h) => !h.lastSeenAt)];
   return (
     <div className="host-grid">
       {ordered.map((h) => (
-        <HostCard key={h.hostId} host={h} now={now} warnPct={warnPct} selected={selected} onSelect={onSelect} />
+        <HostCard
+          key={h.hostId}
+          host={h}
+          now={now}
+          warnPct={warnPct}
+          selected={selected}
+          onSelect={onSelect}
+          collapsed={collapsed.has(h.hostId)}
+          onToggle={() => toggle(h.hostId)}
+        />
       ))}
     </div>
   );
 }
 
-function HostCard({ host, now, warnPct, selected, onSelect }: { host: HostView } & Omit<Props, "hosts">) {
+const SUMMARY_ORDER: SessionStatus[] = ["err", "wait", "run", "ended"];
+
+/** たたんだときに出す、状態ごとのセッション数 */
+function SessionSummary({ sessions }: { sessions: SessionView[] }) {
+  if (sessions.length === 0) return <p className="host-empty">稼働中のセッションはありません</p>;
+  return (
+    <p className="host-summary">
+      <span>セッション {sessions.length}</span>
+      {SUMMARY_ORDER.map((st) => {
+        const n = sessions.filter((s) => s.status === st).length;
+        return n === 0 ? null : (
+          <span key={st} className="host-summary-item">
+            <Indicator status={st} size={12} />
+            {STATUS_LABEL[st]} {n}
+          </span>
+        );
+      })}
+    </p>
+  );
+}
+
+function HostCard({
+  host,
+  now,
+  warnPct,
+  selected,
+  onSelect,
+  collapsed,
+  onToggle,
+}: { host: HostView; collapsed: boolean; onToggle: () => void } & Omit<Props, "hosts">) {
   const sub = [host.os, host.hostname !== host.label ? host.hostname : null].filter(Boolean).join(" ・ ");
   // トークンを発行しただけで、まだ一度もデータが届いていない PC
   if (!host.lastSeenAt) {
@@ -43,10 +106,33 @@ function HostCard({ host, now, warnPct, selected, onSelect }: { host: HostView }
       </div>
     );
   }
+  // ダブルクリックでたたむ。キーボードでは Enter・Space で切り替える
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onToggle();
+    }
+  };
+  // ダブルクリックで PC 名が選択状態になるのを防ぐ
+  const onMouseDown = (e: MouseEvent) => {
+    if (e.detail > 1) e.preventDefault();
+  };
   return (
-    <div className="host panel">
+    <div className={`host panel${collapsed ? " host-collapsed" : ""}`}>
       <div className="host-head">
-        <div className="host-id">
+        <div
+          className="host-id host-toggle"
+          role="button"
+          tabIndex={0}
+          aria-expanded={!collapsed}
+          title={collapsed ? "ダブルクリックでひらく" : "ダブルクリックでたたむ"}
+          onDoubleClick={onToggle}
+          onKeyDown={onKeyDown}
+          onMouseDown={onMouseDown}
+        >
+          <svg className="host-chevron" width="12" height="12" viewBox="0 0 12 12" aria-hidden="true">
+            <path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
           <PcIcon />
           <div>
             <div className="host-name mono" title={host.agentVersion ? `エージェント v${host.agentVersion}` : undefined}>
@@ -60,7 +146,9 @@ function HostCard({ host, now, warnPct, selected, onSelect }: { host: HostView }
         </div>
         <span className="host-beat">最終イベント {ago(host.lastSeenAt, now)}</span>
       </div>
-      {host.sessions.length === 0 ? (
+      {collapsed ? (
+        <SessionSummary sessions={host.sessions} />
+      ) : host.sessions.length === 0 ? (
         <p className="host-empty">稼働中のセッションはありません</p>
       ) : (
         host.sessions.map((s) => (
