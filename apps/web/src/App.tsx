@@ -121,7 +121,9 @@ function HostCard({
           <PcIcon />
           <div>
             <div className="host-name mono">{host.label}</div>
-            <div className="host-sub">{sub || "未受信"}</div>
+            <div className="host-sub">
+              {sub || "未受信"} ・ エージェント {host.agentVersion ? `v${host.agentVersion}` : "旧版"}
+            </div>
           </div>
         </div>
         <span className="host-beat">最終イベント {ago(host.lastSeenAt, now)}</span>

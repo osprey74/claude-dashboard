@@ -24,8 +24,8 @@ const obj = (v: unknown): Record<string, unknown> | undefined =>
 
 function touchHost(db: Database, host: HostRow, info: HookIngest["host"], now: string): void {
   db.query(
-    "UPDATE hosts SET hostname = ?, os = ?, label = COALESCE(?, label), last_seen_at = ? WHERE host_id = ?",
-  ).run(info.hostname ?? null, info.os ?? null, info.label || null, now, host.host_id);
+    "UPDATE hosts SET hostname = ?, os = ?, label = COALESCE(?, label), agent_version = ?, last_seen_at = ? WHERE host_id = ?",
+  ).run(info.hostname ?? null, info.os ?? null, info.label || null, info.agentVersion ?? null, now, host.host_id);
 }
 
 export function processHook(db: Database, host: HostRow, body: HookIngest, now = new Date()): void {

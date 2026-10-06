@@ -25,6 +25,8 @@ export interface HostInfo {
   hostname: string;
   os: string;
   label?: string;
+  /** エージェントのバージョン（古いものが動いていないかの確認用） */
+  agentVersion?: string;
 }
 
 /** 利用枠1つ分（5時間枠・週間枠） */
@@ -51,6 +53,7 @@ export interface HostView {
   hostname: string;
   os: string;
   label: string | null;
+  agentVersion: string | null;
   lastSeenAt: string | null;
   sessions: SessionView[];
 }

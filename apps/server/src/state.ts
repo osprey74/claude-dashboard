@@ -9,6 +9,7 @@ interface HostRow {
   hostname: string | null;
   os: string | null;
   label: string;
+  agent_version: string | null;
   last_seen_at: string | null;
 }
 
@@ -39,7 +40,7 @@ const STATUS_ORDER: Record<SessionStatus, number> = { err: 0, wait: 1, run: 2, e
 export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date()): StateSnapshot {
   const hosts = db
     .query<HostRow, []>(
-      "SELECT host_id, hostname, os, label, last_seen_at FROM hosts WHERE revoked_at IS NULL ORDER BY label",
+      "SELECT host_id, hostname, os, label, agent_version, last_seen_at FROM hosts WHERE revoked_at IS NULL ORDER BY label",
     )
     .all();
   const rows = db
@@ -58,6 +59,7 @@ export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date())
         hostname: h.hostname ?? h.label,
         os: h.os ?? "",
         label: h.label,
+        agentVersion: h.agent_version,
         lastSeenAt: h.last_seen_at,
         sessions: [],
       },

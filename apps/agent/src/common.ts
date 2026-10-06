@@ -5,6 +5,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSy
 import { homedir, hostname, platform, release } from "node:os";
 import { join } from "node:path";
 import type { HostInfo } from "@kanseishitsu/shared";
+import pkg from "../package.json";
 
 export const AGENT_DIR = join(homedir(), ".kanseishitsu");
 export const CONFIG_PATH = join(AGENT_DIR, "config.json");
@@ -69,7 +70,7 @@ function osName(): string {
 }
 
 export function hostInfo(cfg: AgentConfig): HostInfo {
-  return { hostname: hostname(), os: osName(), label: cfg.hostLabel };
+  return { hostname: hostname(), os: osName(), label: cfg.hostLabel, agentVersion: pkg.version };
 }
 
 const MAX_STRING = 8000;

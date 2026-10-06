@@ -53,7 +53,7 @@ switch (cmd) {
     const db = openDb(DB_PATH);
     console.table(
       db
-        .query("SELECT label, hostname, os, last_seen_at, revoked_at, host_id FROM hosts ORDER BY created_at")
+        .query("SELECT label, hostname, os, agent_version, last_seen_at, revoked_at, host_id FROM hosts ORDER BY created_at")
         .all(),
     );
     break;
