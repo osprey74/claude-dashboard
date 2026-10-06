@@ -1,6 +1,7 @@
 // 利用枠の行（5時間枠・週間枠）
 
-import type { RateWindow, UsageView } from "@kanseishitsu/shared";
+import { useRef } from "react";
+import type { RateWindow, UsageBreakdown, UsageForecast, UsageView } from "@kanseishitsu/shared";
 import { ago } from "./format";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -47,8 +48,9 @@ export function UsageRow({ usage, now }: { usage: UsageView[]; now: Date }) {
     <section className="usage panel" aria-label="利用枠">
       {rows.map((u) => (
         <div key={u.hostId} className="usage-account">
-          <Window label="5時間枠" w={u.fiveHour} now={now} short />
-          <Window label="週間枠" w={u.sevenDay} now={now} />
+          <Window label="5時間枠" w={u.fiveHour} now={now} short forecast={u.fiveHourForecast} />
+          <Window label="週間枠" w={u.sevenDay} now={now} forecast={u.sevenDayForecast} />
+          {u.fiveHourBreakdown && u.fiveHourBreakdown.items.length > 0 && <Breakdown b={u.fiveHourBreakdown} />}
           <div className="usage-src">
             {u.hostLabel} から取得 ・ {ago(u.takenAt, now)}
           </div>
@@ -58,7 +60,97 @@ export function UsageRow({ usage, now }: { usage: UsageView[]; now: Date }) {
   );
 }
 
-function Window({ label, w, now, short }: { label: string; w: RateWindow | null; now: Date; short?: boolean }) {
+/** 上限予測の1行（目安）。リセットより前に届く見込みのときだけ目立たせる */
+function ForecastLine({ f, w, now }: { f: UsageForecast | null | undefined; w: RateWindow | null; now: Date }) {
+  if (!f || !w?.resetsAt || Date.parse(w.resetsAt) < now.getTime()) return null;
+  const basis = `直近${f.basisMin >= 60 ? `${Math.round(f.basisMin / 60)}時間` : `${f.basisMin}分`}のペース`;
+  if (!f.hitAt || !f.beforeReset) {
+    return <span className="forecast">{basis}ではリセットまでに上限に届かない見込み</span>;
+  }
+  return (
+    <span className="forecast forecast-warn">
+      {basis}（+{f.perHour}%/時）だと <span className="mono">{resetText(f.hitAt)}</span> ごろ上限に届く見込み
+    </span>
+  );
+}
+
+// 内訳の色：検証済みの3色（青・橙・青緑）。4件目からは「その他」にまとめる
+const SERIES = ["var(--series-1)", "var(--series-2)", "var(--series-3)"];
+const TOP = SERIES.length;
+
+/** 色はセッションに固定する（順位が入れ替わっても色が変わらないように、空いた色を使い回す） */
+function useStableSlots(ids: string[]): Map<string, number> {
+  const ref = useRef(new Map<string, number>());
+  const map = ref.current;
+  for (const k of [...map.keys()]) if (!ids.includes(k)) map.delete(k);
+  for (const id of ids) {
+    if (map.has(id)) continue;
+    const used = new Set(map.values());
+    const free = [...Array(TOP).keys()].find((i) => !used.has(i));
+    if (free !== undefined) map.set(id, free);
+  }
+  return map;
+}
+
+/** 今の5時間枠で、Claude Code のどのセッションが多く使っているか（費用の推定から） */
+function Breakdown({ b }: { b: UsageBreakdown }) {
+  const top = b.items.slice(0, TOP);
+  const rest = b.items.slice(TOP);
+  const restPct = Math.round(rest.reduce((a, i) => a + i.pct, 0) * 10) / 10;
+  const slots = useStableSlots(top.map((i) => i.sessionId));
+  const segs = [
+    ...top.map((i) => ({
+      key: i.sessionId,
+      label: i.project,
+      sub: i.hostLabel,
+      pct: i.pct,
+      usd: i.usd,
+      color: SERIES[slots.get(i.sessionId) ?? 0]!,
+    })),
+    ...(rest.length > 0
+      ? [{ key: "other", label: `その他 ${rest.length}件`, sub: "", pct: restPct, usd: Math.round(rest.reduce((a, i) => a + i.usd, 0) * 100) / 100, color: "var(--series-other)" }]
+      : []),
+  ];
+  return (
+    <div className="breakdown">
+      <span className="breakdown-title">5時間枠の内訳（Claude Code の推定費用 ${b.totalUsd.toFixed(2)} 中）</span>
+      <span className="breakdown-bar" role="img" aria-label={segs.map((s) => `${s.label} ${s.pct}%`).join("、")}>
+        {segs.map((s) => (
+          <span
+            key={s.key}
+            className="breakdown-seg"
+            style={{ flexGrow: Math.max(s.pct, 0.5), background: s.color }}
+            title={`${s.label}${s.sub ? `（${s.sub}）` : ""} ・ ${s.pct}% ・ 約 $${s.usd.toFixed(2)}`}
+          />
+        ))}
+      </span>
+      <span className="breakdown-legend">
+        {segs.map((s) => (
+          <span key={s.key} className="breakdown-item" title={`約 $${s.usd.toFixed(2)}`}>
+            <span className="breakdown-swatch" style={{ background: s.color }} />
+            <span className="mono">{s.label}</span>
+            {s.sub && <span className="breakdown-sub">{s.sub}</span>}
+            <span className="breakdown-pct mono">{s.pct}%</span>
+          </span>
+        ))}
+      </span>
+    </div>
+  );
+}
+
+function Window({
+  label,
+  w,
+  now,
+  short,
+  forecast,
+}: {
+  label: string;
+  w: RateWindow | null;
+  now: Date;
+  short?: boolean;
+  forecast?: UsageForecast | null;
+}) {
   // リセット時刻を過ぎた値は古いので出さない
   const expired = w?.resetsAt && Date.parse(w.resetsAt) < now.getTime();
   const used = w && !expired ? Math.max(0, Math.min(100, w.usedPct)) : null;
@@ -85,6 +177,7 @@ function Window({ label, w, now, short }: { label: string; w: RateWindow | null;
           </>
         )}
       </span>
+      <ForecastLine f={forecast} w={w} now={now} />
     </div>
   );
 }

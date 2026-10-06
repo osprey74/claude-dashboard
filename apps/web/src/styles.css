@@ -11,6 +11,11 @@
   --sub2: #b7c1d0;
   --muted: #6b778a;
   --accent: #5bc0d6;
+  /* 内訳の色（dataviz の検証済みの3色。背景 #131b2a で色覚の型によらず区別できる）と「その他」 */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-other: #5b6678;
   --run: #43c57f;
   --wait: #f5c451;
   --err: #f06a43;
@@ -279,3 +284,20 @@ h1, h2 { margin: 0; }
 @keyframes detail-flash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
 .detail.flash { animation: detail-flash 1.2s ease-out; }
 @media (prefers-reduced-motion: reduce) { .detail.flash { animation: none; } }
+
+/* 上限予測と消費内訳 */
+.forecast { flex: 1 1 100%; font-size: 12px; color: var(--sub); }
+.forecast-warn { color: var(--wait); }
+.forecast-warn .mono { color: var(--text); }
+.breakdown { flex: 1 1 100%; display: flex; flex-direction: column; gap: 6px; }
+.breakdown-title { font-size: 12px; color: var(--sub); }
+.breakdown-bar { display: flex; gap: 2px; height: 10px; }
+.breakdown-seg { display: block; min-width: 4px; height: 100%; }
+.breakdown-seg:first-child { border-radius: 4px 0 0 4px; }
+.breakdown-seg:last-child { border-radius: 0 4px 4px 0; }
+.breakdown-seg:only-child { border-radius: 4px; }
+.breakdown-legend { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; color: var(--sub2); }
+.breakdown-item { display: inline-flex; align-items: center; gap: 6px; }
+.breakdown-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.breakdown-sub { color: var(--sub); }
+.breakdown-pct { color: var(--text); }

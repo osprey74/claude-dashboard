@@ -106,6 +106,27 @@ export interface UsageView {
   takenAt: string;
   fiveHour: RateWindow | null;
   sevenDay: RateWindow | null;
+  /** フェーズ5：上限予測（目安） */
+  fiveHourForecast?: UsageForecast | null;
+  sevenDayForecast?: UsageForecast | null;
+  /** フェーズ5：今の5時間枠の消費内訳（Claude Code の費用の推定から） */
+  fiveHourBreakdown?: UsageBreakdown | null;
+}
+
+export interface UsageForecast {
+  /** 1時間あたりの増え方（%） */
+  perHour: number;
+  /** 100% に届く見込みの時刻。増えていなければ null */
+  hitAt: string | null;
+  /** リセットより前に届く見込みか */
+  beforeReset: boolean;
+  /** 計算に使った期間（分） */
+  basisMin: number;
+}
+
+export interface UsageBreakdown {
+  totalUsd: number;
+  items: { sessionId: string; project: string; hostLabel: string; usd: number; pct: number }[];
 }
 
 export interface StateSnapshot {

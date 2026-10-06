@@ -14,6 +14,7 @@ import {
   type UsageView,
 } from "@kanseishitsu/shared";
 import { openAlerts } from "./alerts";
+import { breakdown, forecast } from "./usage";
 import type { ServerConfig } from "./config";
 
 interface HostRow {
@@ -172,6 +173,14 @@ export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date())
       fiveHour: u.five_hour_pct === null ? null : { usedPct: u.five_hour_pct, resetsAt: u.five_hour_reset },
       sevenDay: u.seven_day_pct === null ? null : { usedPct: u.seven_day_pct, resetsAt: u.seven_day_reset },
     }));
+  // 同じアカウント（5時間枠のリセット時刻が同じ）の PC をまとめて、予測と内訳を付ける
+  for (const u of usage) {
+    const reset5 = u.fiveHour?.resetsAt ?? null;
+    const sameAccount = usage.filter((o) => o.fiveHour?.resetsAt === reset5).map((o) => o.hostId);
+    u.fiveHourForecast = forecast(db, "five", reset5, now);
+    u.sevenDayForecast = forecast(db, "seven", u.sevenDay?.resetsAt ?? null, now);
+    u.fiveHourBreakdown = breakdown(db, sameAccount, reset5, "five", now);
+  }
 
   return {
     generatedAt: now.toISOString(),

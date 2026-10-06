@@ -2,6 +2,7 @@
 
 import type { Database } from "bun:sqlite";
 import { recordDanger, recordTouch, trackDangerOutcome } from "./alerts";
+import { recordCost } from "./usage";
 import {
   AGENT_TOOLS,
   codexModel,
@@ -287,6 +288,8 @@ export function processStatusline(db: Database, host: HostRow, body: StatuslineI
         ).run(label, ctx, at, sessionId);
       }
       recordRemote(db, sessionId, p);
+      const cost = num(obj(p.cost)?.total_cost_usd);
+      if (cost !== undefined) recordCost(db, host.host_id, sessionId, cost, at);
     }
 
     const rl = obj(p.rate_limits);
