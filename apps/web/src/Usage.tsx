@@ -105,10 +105,11 @@ function Breakdown({ b }: { b: UsageBreakdown }) {
       sub: i.hostLabel,
       pct: i.pct,
       usd: i.usd,
+      estimated: i.estimated,
       color: SERIES[slots.get(i.sessionId) ?? 0]!,
     })),
     ...(rest.length > 0
-      ? [{ key: "other", label: `その他 ${rest.length}件`, sub: "", pct: restPct, usd: Math.round(rest.reduce((a, i) => a + i.usd, 0) * 100) / 100, color: "var(--series-other)" }]
+      ? [{ key: "other", label: `その他 ${rest.length}件`, sub: "", pct: restPct, usd: Math.round(rest.reduce((a, i) => a + i.usd, 0) * 100) / 100, estimated: rest.some((i) => i.estimated), color: "var(--series-other)" }]
       : []),
   ];
   return (
@@ -131,9 +132,15 @@ function Breakdown({ b }: { b: UsageBreakdown }) {
             <span className="mono">{s.label}</span>
             {s.sub && <span className="breakdown-sub">{s.sub}</span>}
             <span className="breakdown-pct mono">{s.pct}%</span>
+            {s.estimated && <span className="breakdown-est">見積もり</span>}
           </span>
         ))}
       </span>
+      {b.items.some((i) => i.estimated) && (
+        <span className="breakdown-note">
+          「見積もり」は VS Code・Desktop のセッションで、会話記録のトークン数から計算しています（裏側の呼び出しを含まないため、少なめに出ます）
+        </span>
+      )}
     </div>
   );
 }

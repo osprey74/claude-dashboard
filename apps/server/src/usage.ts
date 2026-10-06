@@ -11,19 +11,29 @@ import type { UsageBreakdown, UsageForecast } from "@kanseishitsu/shared";
 const FIVE_HOUR_MS = 5 * 3600_000;
 const SEVEN_DAY_MS = 7 * 86400_000;
 
-/** 費用が変わったときだけ記録する */
-export function recordCost(db: Database, hostId: string, sessionId: string, costUsd: number, at: string): void {
+export type CostSource = "statusline" | "transcript";
+
+/** 費用が変わったときだけ記録する。statusline はターミナルの statusLine の値、transcript は会話記録からの見積もり */
+export function recordCost(
+  db: Database,
+  hostId: string,
+  sessionId: string,
+  costUsd: number,
+  at: string,
+  source: CostSource = "statusline",
+): void {
   const last = db
-    .query<{ cost_usd: number }, [string]>(
-      "SELECT cost_usd FROM session_costs WHERE session_id = ? ORDER BY taken_at DESC LIMIT 1",
+    .query<{ cost_usd: number }, [string, string]>(
+      "SELECT cost_usd FROM session_costs WHERE session_id = ? AND source = ? ORDER BY taken_at DESC LIMIT 1",
     )
-    .get(sessionId);
+    .get(sessionId, source);
   if (last && Math.abs(last.cost_usd - costUsd) < 1e-9) return;
-  db.query("INSERT INTO session_costs (session_id, host_id, taken_at, cost_usd) VALUES (?, ?, ?, ?)").run(
+  db.query("INSERT INTO session_costs (session_id, host_id, taken_at, cost_usd, source) VALUES (?, ?, ?, ?, ?)").run(
     sessionId,
     hostId,
     at,
     costUsd,
+    source,
   );
 }
 
@@ -83,12 +93,16 @@ export function breakdown(db: Database, hostIds: string[], resetsAt: string | nu
   if (!resetsAt || hostIds.length === 0) return null;
   const start = new Date(Date.parse(resetsAt) - (win === "five" ? FIVE_HOUR_MS : SEVEN_DAY_MS)).toISOString();
   const marks = hostIds.map(() => "?").join(",");
-  const rows = db
-    .query<{ session_id: string; taken_at: string; cost_usd: number }, string[]>(
-      `SELECT session_id, taken_at, cost_usd FROM session_costs
-       WHERE host_id IN (${marks}) AND taken_at >= ? AND taken_at <= ? ORDER BY session_id, taken_at`,
+  // statusLine の値があるセッションはそれを、ないセッション（VS Code・Desktop）は会話記録からの見積もりを使う
+  const all = db
+    .query<{ session_id: string; taken_at: string; cost_usd: number; source: CostSource }, string[]>(
+      `SELECT session_id, taken_at, cost_usd, source FROM session_costs
+       WHERE host_id IN (${marks}) AND taken_at >= ? AND taken_at <= ? ORDER BY session_id, source, taken_at`,
     )
     .all(...hostIds, start, now.toISOString());
+  const hasStatusline = new Set(all.filter((r) => r.source === "statusline").map((r) => r.session_id));
+  const rows = all.filter((r) => (hasStatusline.has(r.session_id) ? r.source === "statusline" : r.source === "transcript"));
+  const sourceOf = new Map(rows.map((r) => [r.session_id, r.source]));
   const used = new Map<string, number>();
   let prevSession = "";
   let prev = 0;
@@ -97,10 +111,10 @@ export function breakdown(db: Database, hostIds: string[], resetsAt: string | nu
       prevSession = r.session_id;
       // 枠より前の最後の値が基準。なければ、枠の中で始まったセッションは 0、そうでなければ最初の値を基準にする
       const before = db
-        .query<{ cost_usd: number }, [string, string]>(
-          "SELECT cost_usd FROM session_costs WHERE session_id = ? AND taken_at < ? ORDER BY taken_at DESC LIMIT 1",
+        .query<{ cost_usd: number }, [string, string, string]>(
+          "SELECT cost_usd FROM session_costs WHERE session_id = ? AND source = ? AND taken_at < ? ORDER BY taken_at DESC LIMIT 1",
         )
-        .get(r.session_id, start);
+        .get(r.session_id, r.source, start);
       const started = db
         .query<{ started_at: string }, [string]>("SELECT started_at FROM sessions WHERE session_id = ?")
         .get(r.session_id)?.started_at;
@@ -127,6 +141,7 @@ export function breakdown(db: Database, hostIds: string[], resetsAt: string | nu
         hostLabel: s?.label ?? "",
         usd: Math.round(usd * 100) / 100,
         pct: Math.round((usd / total) * 1000) / 10,
+        estimated: sourceOf.get(sessionId) === "transcript",
       };
     });
   return { totalUsd: Math.round(total * 100) / 100, items };

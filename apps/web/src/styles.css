@@ -301,3 +301,5 @@ h1, h2 { margin: 0; }
 .breakdown-swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
 .breakdown-sub { color: var(--sub); }
 .breakdown-pct { color: var(--text); }
+.breakdown-est { font-size: 10px; color: var(--sub); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.breakdown-note { font-size: 11px; color: var(--sub); }

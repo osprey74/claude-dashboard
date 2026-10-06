@@ -174,9 +174,13 @@ export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date())
       sevenDay: u.seven_day_pct === null ? null : { usedPct: u.seven_day_pct, resetsAt: u.seven_day_reset },
     }));
   // 同じアカウント（5時間枠のリセット時刻が同じ）の PC をまとめて、予測と内訳を付ける
+  // statusLine が届かない PC（VS Code・Desktop だけで使っている PC）は利用枠の値がなく、どのアカウントか分からないため、
+  // 同じアカウントとみなして含める（今の運用はすべて同じアカウント）
+  const withUsage = new Set(usage.filter((u) => Date.parse(u.takenAt) > now.getTime() - 5 * 3600_000).map((u) => u.hostId));
+  const noUsage = hosts.map((h) => h.host_id).filter((id) => !withUsage.has(id));
   for (const u of usage) {
     const reset5 = u.fiveHour?.resetsAt ?? null;
-    const sameAccount = usage.filter((o) => o.fiveHour?.resetsAt === reset5).map((o) => o.hostId);
+    const sameAccount = [...usage.filter((o) => o.fiveHour?.resetsAt === reset5).map((o) => o.hostId), ...noUsage];
     u.fiveHourForecast = forecast(db, "five", reset5, now);
     u.sevenDayForecast = forecast(db, "seven", u.sevenDay?.resetsAt ?? null, now);
     u.fiveHourBreakdown = breakdown(db, sameAccount, reset5, "five", now);

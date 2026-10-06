@@ -9,6 +9,7 @@ import { hostInfo, loadConfig, log, post, readStdinJson, remoteSessionId, trunca
 import { setup } from "./setup";
 import { statuslinePayload, statusText } from "./statusline";
 import { modelFromTranscript } from "./transcript";
+import { sessionTokenUsage } from "./usage";
 
 async function runHook(event: string): Promise<void> {
   const payload = await readStdinJson();
@@ -23,6 +24,15 @@ async function runHook(event: string): Promise<void> {
   if (event === "SubagentStop" && typeof payload.agent_transcript_path === "string" && payload.agent_type) {
     const m = modelFromTranscript(payload.agent_transcript_path, undefined, true);
     if (m) payload.subagent_model_from_transcript = m;
+  }
+  // 消費内訳用：応答が終わるたびに、会話記録からモデルごとのトークン数の累計を送る（statusLine のない VS Code・Desktop のため）
+  if (event === "Stop" || event === "SubagentStop" || event === "SessionEnd") {
+    try {
+      const usage = sessionTokenUsage(payload.session_id, payload.transcript_path);
+      if (usage) payload.token_usage = usage;
+    } catch (e) {
+      log(`token usage error: ${String(e)}`);
+    }
   }
   // Remote Control の URL 用。セッションの記録が見つからないときは送らない（サーバー側の値を消さない）
   const remote = remoteSessionId(payload.session_id);

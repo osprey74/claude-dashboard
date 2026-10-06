@@ -126,7 +126,8 @@ export interface UsageForecast {
 
 export interface UsageBreakdown {
   totalUsd: number;
-  items: { sessionId: string; project: string; hostLabel: string; usd: number; pct: number }[];
+  /** estimated：会話記録のトークン数からの見積もり（statusLine のない VS Code・Desktop。少なめに出る） */
+  items: { sessionId: string; project: string; hostLabel: string; usd: number; pct: number; estimated: boolean }[];
 }
 
 export interface StateSnapshot {

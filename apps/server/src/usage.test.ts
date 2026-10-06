@@ -75,8 +75,24 @@ describe("消費内訳", () => {
       `INSERT INTO sessions (session_id, host_id, project, status, status_text, started_at, last_event_at)
        VALUES ('old', ?, 'old', 'run', 'x', '2026-10-06T01:00:00.000Z', '2026-10-06T01:00:00.000Z')`,
     ).run(hostId);
-    db.query("INSERT INTO session_costs VALUES ('old', ?, '2026-10-06T04:00:00.000Z', 5)").run(hostId);
+    db.query("INSERT INTO session_costs (session_id, host_id, taken_at, cost_usd) VALUES ('old', ?, '2026-10-06T04:00:00.000Z', 5)").run(hostId);
     recordCost(db, hostId, "old", 6.5, iso(10));
     expect(breakdown(db, [hostId], RESET, "five", new Date(iso(20)))!.totalUsd).toBe(1.5);
+  });
+});
+
+describe("消費内訳の出どころ", () => {
+  test("statusLine の値があればそれを使い、なければ会話記録からの見積もりを使う", () => {
+    const { db, hostId, session } = setup();
+    session("term", 0);
+    session("vscode", 0);
+    recordCost(db, hostId, "term", 2, iso(5));
+    recordCost(db, hostId, "term", 1.8, iso(6), "transcript");
+    recordCost(db, hostId, "vscode", 1, iso(7), "transcript");
+    const b = breakdown(db, [hostId], RESET, "five", new Date(iso(10)))!;
+    expect(b.items.map((i) => [i.project, i.usd, i.estimated])).toEqual([
+      ["proj-term", 2, false],
+      ["proj-vscode", 1, true],
+    ]);
   });
 });
