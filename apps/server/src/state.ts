@@ -3,6 +3,7 @@
 import type { Database } from "bun:sqlite";
 import {
   effectiveStatus,
+  usageAccountKey,
   remoteControlUrl,
   type HostView,
   type PlayerKind,
@@ -179,8 +180,10 @@ export function buildSnapshot(db: Database, cfg: ServerConfig, now = new Date())
   const withUsage = new Set(usage.filter((u) => Date.parse(u.takenAt) > now.getTime() - 5 * 3600_000).map((u) => u.hostId));
   const noUsage = hosts.map((h) => h.host_id).filter((id) => !withUsage.has(id));
   for (const u of usage) {
-    const reset5 = u.fiveHour?.resetsAt ?? null;
-    const sameAccount = [...usage.filter((o) => o.fiveHour?.resetsAt === reset5).map((o) => o.hostId), ...noUsage];
+    // リセット時刻を過ぎた5時間枠は、新しい枠がまだ始まっていない（内訳・予測なし）
+    const r5 = u.fiveHour?.resetsAt ?? null;
+    const reset5 = r5 && Date.parse(r5) > now.getTime() ? r5 : null;
+    const sameAccount = [...usage.filter((o) => usageAccountKey(o) === usageAccountKey(u)).map((o) => o.hostId), ...noUsage];
     u.fiveHourForecast = forecast(db, "five", reset5, now);
     u.sevenDayForecast = forecast(db, "seven", u.sevenDay?.resetsAt ?? null, now);
     u.fiveHourBreakdown = breakdown(db, sameAccount, reset5, "five", now);

@@ -77,3 +77,11 @@ export function remoteControlUrl(remoteSessionId: string | null | undefined): st
 export function isRemoteSessionId(v: unknown): v is string {
   return typeof v === "string" && REMOTE_SESSION_ID.test(v);
 }
+
+/**
+ * 利用枠の値から同じアカウントを見分ける鍵。週間枠のリセット時刻を使う
+ * （5時間枠はリセットのあと、新しい枠が始まるまで値が届かず、見分けに使えないため）
+ */
+export function usageAccountKey(u: { hostId: string; fiveHour: { resetsAt: string | null } | null; sevenDay: { resetsAt: string | null } | null }): string {
+  return u.sevenDay?.resetsAt ?? u.fiveHour?.resetsAt ?? `host:${u.hostId}`;
+}

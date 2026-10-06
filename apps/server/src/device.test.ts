@@ -22,7 +22,7 @@ describe("deviceLine", () => {
     fiveHour: five === null ? null : { usedPct: five, resetsAt: fiveReset },
     sevenDay: seven === null ? null : { usedPct: seven, resetsAt: "2026-10-10T00:00:00Z" },
   });
-  test("いちばん新しい値の残りを送る。リセット時刻を過ぎた値と、ない値は -", () => {
+  test("いちばん新しい値の残りを送る。値がまったくなければ -", () => {
     const s = {
       counts: { run: 1, wait: 0, err: 0 },
       usage: [
@@ -32,7 +32,8 @@ describe("deviceLine", () => {
     } as unknown as StateSnapshot;
     expect(deviceLine(s, now)).toBe("S run 73 91");
     const old = { counts: { run: 0, wait: 0, err: 1 }, usage: [usage("2026-10-06T07:00:00Z", 50, "2026-10-06T07:30:00Z", null)] };
-    expect(deviceLine(old as unknown as StateSnapshot, now)).toBe("S err - -");
+    // リセット時刻を過ぎた枠・値のない枠は、新しい枠がまだ始まっていないので 100
+    expect(deviceLine(old as unknown as StateSnapshot, now)).toBe("S err 100 100");
     expect(deviceLine({ counts: { run: 0, wait: 0, err: 0 }, usage: [] } as unknown as StateSnapshot, now)).toBe("S idle - -");
   });
 });

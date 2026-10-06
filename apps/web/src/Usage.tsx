@@ -1,7 +1,7 @@
 // 利用枠の行（5時間枠・週間枠）
 
 import { useRef } from "react";
-import type { RateWindow, UsageBreakdown, UsageForecast, UsageView } from "@kanseishitsu/shared";
+import { usageAccountKey, type RateWindow, type UsageBreakdown, type UsageForecast, type UsageView } from "@kanseishitsu/shared";
 import { ago } from "./format";
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -17,7 +17,7 @@ const untilText = (iso: string | null, now: Date) => {
 };
 
 /**
- * 利用枠はアカウント単位の値。同じアカウントの PC からはリセット時刻が同じ値が届くため、それを1行にまとめて最新の値を出す。
+ * 利用枠はアカウント単位の値。同じアカウントの PC からは週間枠のリセット時刻が同じ値が届くため、それを1行にまとめて最新の値を出す。
  * 24 時間以内に届いた値だけを出す（別のアカウントの PC があれば行が分かれる）
  */
 function distinct(usage: UsageView[], now: Date): UsageView[] {
@@ -25,9 +25,7 @@ function distinct(usage: UsageView[], now: Date): UsageView[] {
   for (const u of usage) {
     if (now.getTime() - Date.parse(u.takenAt) > 24 * 3600_000) continue;
     // usage は新しい順に並んでいるので、先に入ったものが最新
-    const same = out.find(
-      (o) => o.fiveHour?.resetsAt === u.fiveHour?.resetsAt && o.sevenDay?.resetsAt === u.sevenDay?.resetsAt,
-    );
+    const same = out.find((o) => usageAccountKey(o) === usageAccountKey(u));
     if (!same) out.push(u);
   }
   return out;
@@ -158,20 +156,23 @@ function Window({
   short?: boolean;
   forecast?: UsageForecast | null;
 }) {
-  // リセット時刻を過ぎた値は古いので出さない
-  const expired = w?.resetsAt && Date.parse(w.resetsAt) < now.getTime();
-  const used = w && !expired ? Math.max(0, Math.min(100, w.usedPct)) : null;
+  // 値がない、またはリセット時刻を過ぎたときは、新しい枠がまだ始まっていない（使っていないので残り 100%）。
+  // statusLine は新しい枠が始まるまで、その枠の値を送ってこない
+  const expired = !w || (w.resetsAt !== null && Date.parse(w.resetsAt) < now.getTime());
+  const used = expired ? 0 : Math.max(0, Math.min(100, w.usedPct));
   return (
     <div className="window">
       <span className="window-label">{label}</span>
-      <span className="window-track" role="img" aria-label={used === null ? `${label} 不明` : `${label} 使用率 ${Math.round(used)}%`}>
-        <span className="window-bar" style={{ width: `${used ?? 0}%` }} />
+      <span className="window-track" role="img" aria-label={`${label} 使用率 ${Math.round(used)}%`}>
+        <span className="window-bar" style={{ width: `${used}%` }} />
       </span>
       <span className="window-remain">
-        残り <span className="mono window-pct">{used === null ? "—" : `${Math.round(100 - used)}%`}</span>
+        残り <span className="mono window-pct">{`${Math.round(100 - used)}%`}</span>
       </span>
       <span className="window-reset">
-        {short && w?.resetsAt && !expired ? (
+        {expired ? (
+          <>新しい枠はまだ始まっていません</>
+        ) : short && w?.resetsAt ? (
           <>
             <span className="only-mobile">{untilText(w.resetsAt, now)}</span>
             <span className="only-desktop">
@@ -180,7 +181,7 @@ function Window({
           </>
         ) : (
           <>
-            次のリセット <span className="mono">{expired ? "—" : resetText(w?.resetsAt ?? null)}</span>
+            次のリセット <span className="mono">{resetText(w?.resetsAt ?? null)}</span>
           </>
         )}
       </span>

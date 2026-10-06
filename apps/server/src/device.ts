@@ -15,15 +15,20 @@ export function deviceLevel(s: StateSnapshot): DeviceLevel {
   return "idle";
 }
 
-/** 表示灯に送る1行。利用枠はいちばん新しい値（24時間以内で、リセット時刻を過ぎていないもの）の残り */
+/**
+ * 表示灯に送る1行。利用枠はいちばん新しい値（24時間以内）の残り。
+ * その値に枠がない、またはリセット時刻を過ぎていれば、新しい枠はまだ始まっていないので残り 100。値がまったくなければ -
+ */
 export function deviceLine(s: StateSnapshot, now = new Date()): string {
   const fresh = s.usage
     .filter((u) => now.getTime() - Date.parse(u.takenAt) < 24 * 3600_000)
     .sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt))[0];
   const remain = (w: { usedPct: number; resetsAt: string | null } | null | undefined) =>
-    !w || (w.resetsAt && Date.parse(w.resetsAt) < now.getTime())
+    !fresh
       ? "-"
-      : String(Math.round(Math.max(0, Math.min(100, 100 - w.usedPct))));
+      : !w || (w.resetsAt && Date.parse(w.resetsAt) < now.getTime())
+        ? "100"
+        : String(Math.round(Math.max(0, Math.min(100, 100 - w.usedPct))));
   return `S ${deviceLevel(s)} ${remain(fresh?.fiveHour)} ${remain(fresh?.sevenDay)}`;
 }
 
