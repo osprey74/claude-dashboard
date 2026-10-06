@@ -18,6 +18,11 @@ async function runHook(event: string): Promise<void> {
     const m = modelFromTranscript(payload.transcript_path);
     if (m) payload.model_from_transcript = m;
   }
+  // サブエージェントのモデルは、サブエージェント自身の会話記録から読む
+  if (event === "SubagentStop" && typeof payload.agent_transcript_path === "string" && payload.agent_type) {
+    const m = modelFromTranscript(payload.agent_transcript_path, undefined, true);
+    if (m) payload.subagent_model_from_transcript = m;
+  }
   const body: HookIngest = {
     event: event || String(payload.hook_event_name ?? "unknown"),
     host: hostInfo(cfg),

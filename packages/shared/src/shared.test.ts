@@ -77,3 +77,33 @@ describe("redactText", () => {
     expect(redactText("npm test -- --token-count")).toBe("npm test -- --token-count");
   });
 });
+
+import { isCodexCall, todosFromInput } from "./index";
+
+describe("isCodexCall", () => {
+  const bash = (command: string) => isCodexCall("Bash", { command });
+  test("codex の起動を検知する", () => {
+    expect(bash("codex exec 'review'")).toBe(true);
+    expect(bash("cd app && codex exec --full-auto 'fix'")).toBe(true);
+    expect(bash("OPENAI_API_KEY=x codex 'hi'")).toBe(true);
+    expect(bash("npx -y @openai/codex exec 'x'")).toBe(true);
+    expect(isCodexCall("PowerShell", { command: "& codex.exe exec 'x'" })).toBe(true);
+    expect(isCodexCall("mcp__codex__codex", {})).toBe(true);
+  });
+  test("codex という文字を含むだけのものは除外する", () => {
+    expect(bash("cd codex-project && ls")).toBe(false);
+    expect(bash("grep -r codex src/")).toBe(false);
+    expect(bash("cat docs/codex.md")).toBe(false);
+    expect(isCodexCall("Read", { file_path: "codex" })).toBe(false);
+  });
+});
+
+describe("todosFromInput", () => {
+  test("TodoWrite の状態を変換する", () => {
+    expect(todosFromInput({ todos: [{ content: "a", status: "completed" }, { content: "b", status: "pending" }] })).toEqual([
+      { label: "a", status: "done" },
+      { label: "b", status: "todo" },
+    ]);
+    expect(todosFromInput({})).toBeNull();
+  });
+});

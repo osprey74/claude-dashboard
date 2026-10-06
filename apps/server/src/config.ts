@@ -14,6 +14,8 @@ export interface ServerConfig {
   thresholds: StatusThresholds & {
     /** 入力待ち・異常のままこの秒数イベントがなければ一覧から外す（SessionEnd が届かなかった場合の後始末） */
     hideIdleAfterSec: number;
+    /** コンテキスト使用率がこの値（%）以上で「圧縮間近」として黄色で表示する */
+    ctxWarnPct: number;
   };
   /** 画面ログイン用。Bun.password のハッシュ。未設定ならログインできない */
   passwordHash: string | null;
@@ -31,7 +33,7 @@ export const DB_PATH = join(DATA_DIR, "kanseishitsu.db");
 const DEFAULTS: Omit<ServerConfig, "sessionSecret"> = {
   host: "127.0.0.1",
   port: 8790,
-  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600 },
+  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70 },
   passwordHash: null,
   sessionDays: 30,
 };

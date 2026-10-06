@@ -10,12 +10,12 @@ const NEWLINE = 0x0a;
 /** これより長い1行は応答の行ではない（巨大なツール結果）とみなして読み飛ばす */
 const MAX_LINE_BYTES = 4 * 1024 * 1024;
 
-function modelFromLine(line: Buffer): string | undefined {
+function modelFromLine(line: Buffer, allowSidechain: boolean): string | undefined {
   // JSON として読む前に安く絞り込む
   if (line.indexOf('"assistant"') < 0) return undefined;
   try {
     const d = JSON.parse(line.toString("utf8"));
-    if (d?.type !== "assistant" || d.isSidechain) return undefined;
+    if (d?.type !== "assistant" || (d.isSidechain && !allowSidechain)) return undefined;
     const model = d.message?.model;
     return typeof model === "string" && model && !model.startsWith("<") ? model : undefined;
   } catch {
@@ -23,7 +23,10 @@ function modelFromLine(line: Buffer): string | undefined {
   }
 }
 
-export function modelFromTranscript(path: string, maxScanBytes = MAX_SCAN_BYTES): string | undefined {
+/**
+ * @param allowSidechain サブエージェント自身の会話記録（subagents/agent-*.jsonl）を読むときは true
+ */
+export function modelFromTranscript(path: string, maxScanBytes = MAX_SCAN_BYTES, allowSidechain = false): string | undefined {
   let fd: number | undefined;
   try {
     fd = openSync(path, "r");
@@ -41,13 +44,13 @@ export function modelFromTranscript(path: string, maxScanBytes = MAX_SCAN_BYTES)
       let end = buf.length;
       let nl = buf.lastIndexOf(NEWLINE, end - 1);
       while (nl >= 0) {
-        const m = modelFromLine(buf.subarray(nl + 1, end));
+        const m = modelFromLine(buf.subarray(nl + 1, end), allowSidechain);
         if (m) return m;
         end = nl;
         nl = end > 0 ? buf.lastIndexOf(NEWLINE, end - 1) : -1;
       }
       carry = end > MAX_LINE_BYTES ? Buffer.alloc(0) : Buffer.from(buf.subarray(0, end));
-      if (pos === 0) return carry.length ? modelFromLine(carry) : undefined;
+      if (pos === 0) return carry.length ? modelFromLine(carry, allowSidechain) : undefined;
     }
   } catch {
     // ファイルがない・読めない場合は何もしない

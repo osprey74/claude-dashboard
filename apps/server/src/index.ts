@@ -21,6 +21,7 @@ import { openDb } from "./db";
 import { lastStatusline, processHook, processStatusline } from "./ingest";
 import { loginPage } from "./login-page";
 import { buildSnapshot, snapshotKey } from "./state";
+import { history, sessionDetail } from "./views";
 
 const cfg = loadConfig();
 const db = openDb(DB_PATH);
@@ -141,6 +142,19 @@ app.use("*", async (c, next) => {
 });
 
 app.get("/api/state", (c) => c.json(buildSnapshot(db, cfg)));
+
+app.get("/api/sessions/:id", (c) => {
+  const d = sessionDetail(db, cfg, c.req.param("id"));
+  return d ? c.json(d) : c.json({ error: "not found" }, 404);
+});
+
+app.get("/api/history", (c) => {
+  const f = c.req.query("filter");
+  const filter = f === "prompt" || f === "done" || f === "err" ? f : "all";
+  const limit = Math.min(200, Math.max(1, Number(c.req.query("limit")) || 50));
+  const before = Number(c.req.query("before")) || undefined;
+  return c.json(history(db, filter, limit, before));
+});
 
 // フェーズ1ゲート確認用：最後に届いた statusLine の内容（rate_limits が届くかの確認）
 app.get("/api/debug/statusline", (c) => c.json(Object.fromEntries(lastStatusline)));

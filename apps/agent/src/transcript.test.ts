@@ -55,3 +55,11 @@ describe("modelFromTranscript", () => {
     expect(modelFromTranscript("/no/such/file.jsonl")).toBeUndefined();
   });
 });
+
+describe("サブエージェントの会話記録", () => {
+  test("allowSidechain で isSidechain の行も読む", () => {
+    const p = write([{ type: "assistant", isSidechain: true, message: { model: "claude-sonnet-5-5" } }]);
+    expect(modelFromTranscript(p)).toBeUndefined();
+    expect(modelFromTranscript(p, undefined, true)).toBe("claude-sonnet-5-5");
+  });
+});

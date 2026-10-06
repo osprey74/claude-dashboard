@@ -2,7 +2,10 @@
 
 import type { Database } from "bun:sqlite";
 import {
+  AGENT_TOOLS,
+  isCodexCall,
   modelLabel,
+  todosFromInput,
   projectFromCwd,
   statusFromHook,
   type HookIngest,
@@ -74,9 +77,23 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
         at,
         st.status === "ended" ? at : null,
       );
-      return;
+    } else {
+      updateSession(db, host, sessionId, existing, change, cwd, model, at);
     }
+    trackDetails(db, sessionId, event, payload, at);
+  })();
+}
 
+function updateSession(
+  db: Database,
+  host: HostRow,
+  sessionId: string,
+  existing: SessionRow,
+  change: ReturnType<typeof statusFromHook>,
+  cwd: string | null,
+  model: string | null,
+  at: string,
+): void {
     // 終了済みのセッションにイベントが来た場合（--resume など）は一覧に戻す
     const endedAt = change?.status === "ended" ? at : change ? null : existing.ended_at;
     db.query(
@@ -102,7 +119,109 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
       endedAt,
       sessionId,
     );
-  })();
+}
+
+const RESULT_MAX = 4000;
+const clip = (s: string, n: number) => (s.length > n ? s.slice(0, n) + "…" : s);
+
+/** フェーズ2：直近のプロンプト時刻・作業結果・進捗・プレイヤーを記録する */
+function trackDetails(db: Database, sessionId: string, event: string, payload: Record<string, unknown>, at: string): void {
+  const tool = str(payload.tool_name);
+  const toolUseId = str(payload.tool_use_id);
+  const input = obj(payload.tool_input);
+
+  switch (event) {
+    case "UserPromptSubmit":
+      db.query("UPDATE sessions SET last_prompt_at = ? WHERE session_id = ?").run(at, sessionId);
+      return;
+
+    case "Stop": {
+      const msg = str(payload.last_assistant_message);
+      if (msg) db.query("UPDATE sessions SET last_result = ? WHERE session_id = ?").run(clip(msg, RESULT_MAX), sessionId);
+      return;
+    }
+
+    case "PreToolUse": {
+      if (tool === "TodoWrite") {
+        const todos = todosFromInput(input);
+        if (todos) db.query("UPDATE sessions SET todos_json = ? WHERE session_id = ?").run(JSON.stringify(todos), sessionId);
+        return;
+      }
+      if (!toolUseId) return;
+      if (tool && AGENT_TOOLS.has(tool)) {
+        db.query(
+          `INSERT OR IGNORE INTO players (player_id, session_id, kind, agent_type, model, task, background, status, started_at)
+           VALUES (?, ?, 'claude', ?, ?, ?, ?, 'run', ?)`,
+        ).run(
+          toolUseId,
+          sessionId,
+          str(input?.subagent_type) ?? null,
+          modelLabel(str(input?.model)) ?? null,
+          str(input?.description) ?? null,
+          input?.run_in_background === true ? 1 : 0,
+          at,
+        );
+      } else if (isCodexCall(tool, input)) {
+        const task = str(input?.description) ?? clip(str(input?.command) ?? str(input?.prompt) ?? "", 80);
+        db.query(
+          `INSERT OR IGNORE INTO players (player_id, session_id, kind, task, background, status, started_at)
+           VALUES (?, ?, 'codex', ?, ?, 'run', ?)`,
+        ).run(toolUseId, sessionId, task || null, input?.run_in_background === true ? 1 : 0, at);
+      }
+      return;
+    }
+
+    case "PostToolUse":
+    case "PostToolUseFailure": {
+      if (!toolUseId) return;
+      const p = db
+        .query<{ kind: string; background: number }, [string]>("SELECT kind, background FROM players WHERE player_id = ?")
+        .get(toolUseId);
+      if (!p) return;
+      const res = obj(payload.tool_response);
+      const resolved = modelLabel(str(res?.resolvedModel));
+      if (resolved) db.query("UPDATE players SET model = ? WHERE player_id = ?").run(resolved, toolUseId);
+      // バックグラウンドで起動したものは、ツールの完了ではなく SubagentStop で終了とする
+      if (p.background && event === "PostToolUse") return;
+      db.query("UPDATE players SET status = ?, ended_at = ? WHERE player_id = ? AND status = 'run'").run(
+        event === "PostToolUseFailure" ? "err" : "done",
+        at,
+        toolUseId,
+      );
+      return;
+    }
+
+    case "SubagentStart": {
+      // agent_type が空のものは Claude Code 内部の補助処理なので扱わない
+      const agentId = str(payload.agent_id);
+      const type = str(payload.agent_type);
+      if (!agentId || !type) return;
+      db.query(
+        `UPDATE players SET agent_id = ? WHERE player_id = (
+           SELECT player_id FROM players
+           WHERE session_id = ? AND kind = 'claude' AND agent_id IS NULL AND status = 'run'
+             AND (agent_type = ? OR agent_type IS NULL)
+           ORDER BY started_at DESC LIMIT 1)`,
+      ).run(agentId, sessionId, type);
+      return;
+    }
+
+    case "SubagentStop": {
+      const agentId = str(payload.agent_id);
+      if (!agentId || !str(payload.agent_type)) return;
+      const model = modelLabel(str(payload.subagent_model_from_transcript));
+      db.query(
+        `UPDATE players SET status = CASE WHEN status = 'run' THEN 'done' ELSE status END,
+           ended_at = COALESCE(ended_at, ?), model = COALESCE(model, ?)
+         WHERE agent_id = ?`,
+      ).run(at, model ?? null, agentId);
+      return;
+    }
+
+    case "SessionEnd":
+      db.query("UPDATE players SET status = 'done', ended_at = ? WHERE session_id = ? AND status = 'run'").run(at, sessionId);
+      return;
+  }
 }
 
 /** フェーズ1ゲート確認用：ホストごとに最後に受けた statusLine の内容（伏せ字化済み） */

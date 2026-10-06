@@ -1,5 +1,7 @@
 // サーバー・画面・エージェントで共有する型
 
+import type { PlayerKind, PlayerStatus, TodoItem } from "./players";
+
 /** セッションの状態。run=稼働中（緑）、wait=入力待ち（黄）、err=異常（朱）、ended=終了 */
 export type SessionStatus = "run" | "wait" | "err" | "ended";
 
@@ -46,6 +48,44 @@ export interface SessionView {
   ctxPct: number | null;
   startedAt: string;
   lastEventAt: string;
+  /** 直近のプロンプト以降に起動した、または稼働中のプレイヤー */
+  players: PlayerView[];
+}
+
+export interface PlayerView {
+  playerId: string;
+  kind: PlayerKind;
+  /** モデルのラベル（Sonnet 5.5 など）。不明なら null */
+  model: string | null;
+  agentType: string | null;
+  task: string | null;
+  status: PlayerStatus;
+  startedAt: string;
+  endedAt: string | null;
+}
+
+/** 詳細パネル用 */
+export interface SessionDetail {
+  session: SessionView;
+  hostLabel: string;
+  hostSub: string;
+  prompt: { text: string; at: string } | null;
+  todos: TodoItem[] | null;
+  /** 直近の Stop で受け取った最後の応答 */
+  result: { text: string; at: string } | null;
+}
+
+export type HistoryKind = "prompt" | "done" | "err" | "wait" | "start" | "end" | "player";
+export type HistoryFilter = "all" | "prompt" | "done" | "err";
+
+export interface HistoryItem {
+  id: number;
+  at: string;
+  sessionId: string | null;
+  hostLabel: string;
+  project: string;
+  kind: HistoryKind;
+  text: string;
 }
 
 export interface HostView {
@@ -60,6 +100,7 @@ export interface HostView {
 
 export interface UsageView {
   hostId: string;
+  hostLabel: string;
   takenAt: string;
   fiveHour: RateWindow | null;
   sevenDay: RateWindow | null;
@@ -67,6 +108,8 @@ export interface UsageView {
 
 export interface StateSnapshot {
   generatedAt: string;
+  /** 画面の表示に使うしきい値 */
+  ui: { ctxWarnPct: number };
   hosts: HostView[];
   counts: { run: number; wait: number; err: number };
   usage: UsageView[];

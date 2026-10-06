@@ -17,6 +17,7 @@ export const HOOK_EVENTS = [
   "Notification",
   "Stop",
   "StopFailure", // ※ API エラーで朱にする
+  "SubagentStart", // ※ フェーズ2：サブエージェントとプレイヤーの対応付け
   "SubagentStop",
   "SessionEnd",
 ] as const;
