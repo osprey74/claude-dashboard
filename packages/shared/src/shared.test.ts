@@ -1,0 +1,79 @@
+import { describe, expect, test } from "bun:test";
+import { effectiveStatus, modelLabel, projectFromCwd, redactText, statusFromHook } from "./index";
+
+describe("statusFromHook", () => {
+  test("プロンプトとツール実行で稼働中", () => {
+    expect(statusFromHook("UserPromptSubmit", {}, "wait")?.status).toBe("run");
+    expect(statusFromHook("PreToolUse", { tool_name: "Bash" }, "run")).toEqual({
+      status: "run",
+      statusText: "ツール実行中 ・ Bash",
+    });
+  });
+  test("Stop・許可要求で入力待ち", () => {
+    expect(statusFromHook("Stop", {}, "run")?.status).toBe("wait");
+    expect(statusFromHook("Notification", { notification_type: "permission_prompt" }, "run")?.status).toBe("wait");
+    expect(statusFromHook("PermissionRequest", { tool_name: "Bash" }, "run")?.statusText).toBe("許可待ち ・ Bash");
+  });
+  test("関係ない通知とサブエージェント終了は状態を変えない", () => {
+    expect(statusFromHook("Notification", { notification_type: "auth_success" }, "run")).toBeNull();
+    expect(statusFromHook("SubagentStop", {}, "run")).toBeNull();
+  });
+  test("API エラーで異常、SessionEnd で終了", () => {
+    expect(statusFromHook("StopFailure", { error_type: "rate_limit" }, "run")).toEqual({
+      status: "err",
+      statusText: "API エラー ・ rate_limit",
+    });
+    expect(statusFromHook("SessionEnd", { reason: "other" }, "wait")?.status).toBe("ended");
+  });
+  test("compact による SessionStart は状態を保つ", () => {
+    expect(statusFromHook("SessionStart", { source: "compact" }, "run")).toBeNull();
+    expect(statusFromHook("SessionStart", { source: "startup" }, null)?.status).toBe("wait");
+  });
+});
+
+describe("effectiveStatus", () => {
+  const t0 = new Date("2026-10-06T00:00:00Z");
+  test("稼働中のまま 15 分超で応答なし（推定）", () => {
+    const run = { status: "run" as const, statusText: "作業中" };
+    expect(effectiveStatus(run, t0, new Date(t0.getTime() + 14 * 60_000)).status).toBe("run");
+    expect(effectiveStatus(run, t0, new Date(t0.getTime() + 16 * 60_000))).toEqual({
+      status: "err",
+      statusText: "応答なし（推定）",
+    });
+  });
+  test("入力待ちは時間が経っても入力待ち", () => {
+    const wait = { status: "wait" as const, statusText: "入力待ち" };
+    expect(effectiveStatus(wait, t0, new Date(t0.getTime() + 3600_000)).status).toBe("wait");
+  });
+});
+
+describe("表示用の変換", () => {
+  test("cwd からプロジェクト名", () => {
+    expect(projectFromCwd("/Users/a/dev/kazahana")).toBe("kazahana");
+    expect(projectFromCwd("C:\\Users\\a\\group-schedule\\")).toBe("group-schedule");
+    expect(projectFromCwd(null)).toBe("(不明)");
+  });
+  test("モデル ID からラベル", () => {
+    expect(modelLabel("claude-opus-5-5")).toBe("Opus 5.5");
+    expect(modelLabel("claude-haiku-4-5-20251001")).toBe("Haiku 4.5");
+    expect(modelLabel("claude-fable-5-1")).toBe("Fable 5.1");
+    expect(modelLabel("Sonnet 5.5")).toBe("Sonnet 5.5");
+    expect(modelLabel("claude-opus-5")).toBe("Opus 5");
+    expect(modelLabel(undefined)).toBeNull();
+  });
+});
+
+describe("redactText", () => {
+  test("トークン・パスワードを伏せ字にする", () => {
+    expect(redactText("export ANTHROPIC_API_KEY=sk-ant-api03-abcdefghijklmnop")).not.toContain("abcdefghijklmnop");
+    expect(redactText("mysql -u root --password=hunter2xyz")).toBe("mysql -u root --password=＊＊＊");
+    expect(redactText("curl -H 'Authorization: Bearer abc.def.ghijkl'")).not.toContain("abc.def.ghijkl");
+    expect(redactText("git clone https://user:s3cretpw@github.com/x/y")).toBe("git clone https://user:＊＊＊@github.com/x/y");
+    expect(redactText("ghp_0123456789abcdefghijABCDEFGHIJ")).toBe("＊＊＊");
+  });
+  test("普通の文は変えない", () => {
+    const s = "週表示で祝日が反映されない不具合を修正し、テストを追加してください";
+    expect(redactText(s)).toBe(s);
+    expect(redactText("npm test -- --token-count")).toBe("npm test -- --token-count");
+  });
+});

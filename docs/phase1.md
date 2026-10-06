@@ -23,7 +23,7 @@
 
 | 項目 | 内容 |
 | --- | --- |
-| サーバー | Mac Mini（macOS）、個人の Tailscale に参加。Tailscale IP は 100.108.134.69 |
+| サーバー | Mac Mini（macOS）、個人の Tailscale に参加。Tailscale IP は設置先の Mac Mini で確認 |
 | クライアント | 会社の Windows PC（複数台）と macOS の端末。会社 PC は会社の Tailscale に参加し、Mac Mini はマシン共有で見えている |
 | 公開ポート | ダッシュボードは 8443 番（`tailscale serve` で HTTPS 公開）。会社アカウントから許可されているのは 8443 番のみ |
 | 使用中のポート | 443 番は既存のウェブアプリが `tailscale serve` で使用中。触らないこと |
