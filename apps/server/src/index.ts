@@ -70,7 +70,10 @@ const ingest = new Hono<Env>();
 ingest.use("*", bodyLimit({ maxSize: 1024 * 1024 }));
 ingest.use("*", async (c, next) => {
   const host = hostFromBearer(db, c.req.header("Authorization"));
-  if (!host) return c.json({ error: "unauthorized" }, 401);
+  if (!host) {
+    console.warn(`[ingest] 401 ${c.req.path} (Authorization ${c.req.header("Authorization") ? "不一致" : "なし"})`);
+    return c.json({ error: "unauthorized" }, 401);
+  }
   c.set("host", host);
   await next();
 });
