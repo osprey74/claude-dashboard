@@ -128,11 +128,19 @@ export function DetailPanel({
       </section>
 
       <footer className="detail-foot">
-        指示の送信は今後のフェーズで対応します。応答や許可が必要なときは{" "}
-        <a href="https://claude.ai/code" target="_blank" rel="noreferrer">
-          Remote Control
-        </a>{" "}
-        を使ってください。
+        {s.remoteUrl ? (
+          <>
+            <a className="remote-open" href={s.remoteUrl} target="_blank" rel="noreferrer">
+              Remote Control で開く ↗
+            </a>
+            <span>応答や許可の操作は、Remote Control（公式アプリ・Web）で行えます。</span>
+          </>
+        ) : (
+          <span>
+            このセッションで <code className="mono">/remote-control</code>{" "}
+            を実行すると、ここから Remote Control で開けるようになります（反映は次の操作のあと）。
+          </span>
+        )}
       </footer>
     </aside>
   );

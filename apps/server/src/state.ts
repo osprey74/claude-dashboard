@@ -3,6 +3,7 @@
 import type { Database } from "bun:sqlite";
 import {
   effectiveStatus,
+  remoteControlUrl,
   type HostView,
   type PlayerKind,
   type PlayerStatus,
@@ -35,6 +36,7 @@ export interface SessionRow {
   started_at: string;
   last_event_at: string;
   last_prompt_at: string | null;
+  remote_session_id: string | null;
 }
 
 interface PlayerRow {
@@ -60,7 +62,7 @@ interface UsageRow {
 }
 
 export const SESSION_COLUMNS =
-  "session_id, host_id, project, cwd, model, status, status_text, ctx_pct, started_at, last_event_at, last_prompt_at";
+  "session_id, host_id, project, cwd, model, status, status_text, ctx_pct, started_at, last_event_at, last_prompt_at, remote_session_id";
 
 const STATUS_ORDER: Record<SessionStatus, number> = { err: 0, wait: 1, run: 2, ended: 3 };
 
@@ -108,6 +110,7 @@ export function toSessionViews(db: Database, cfg: ServerConfig, rows: SessionRow
       ctxPct: r.ctx_pct,
       startedAt: r.started_at,
       lastEventAt: r.last_event_at,
+      remoteUrl: remoteControlUrl(r.remote_session_id),
       players: players.get(r.session_id) ?? [],
     };
   });

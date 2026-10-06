@@ -30,8 +30,9 @@ export function statusText(p: Record<string, unknown>): string {
 }
 
 /** 送信する項目だけを抜き出す（transcript_path などは送らない） */
-export function statuslinePayload(p: Record<string, unknown>): Record<string, unknown> {
+export function statuslinePayload(p: Record<string, unknown>, remote?: string | null): Record<string, unknown> {
   return redactDeep({
+    ...(remote !== undefined ? { remote_session_id: remote } : {}),
     session_id: p.session_id,
     cwd: p.cwd,
     session_name: p.session_name,

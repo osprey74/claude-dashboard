@@ -146,3 +146,26 @@ describe("バックグラウンドの Codex", () => {
     expect(buildSnapshot(db, cfg, now()).hosts[0]!.sessions[0]!.players[0]!.status).toBe("done");
   });
 });
+
+describe("Remote Control の URL", () => {
+  const urlOf = (db: ReturnType<typeof setup>["db"], now: Date) =>
+    buildSnapshot(db, cfg, now).hosts[0]!.sessions[0]!.remoteUrl;
+
+  test("remote_session_id で記録し、null で消し、項目がなければ変えない", () => {
+    const { db, send, now } = setup();
+    send("UserPromptSubmit", { prompt: "x" });
+    expect(urlOf(db, now())).toBeNull();
+    send("PreToolUse", { tool_name: "Bash", tool_use_id: "t1", remote_session_id: "session_01UkUMdpnkpY7ZWnDBue2gVx" });
+    expect(urlOf(db, now())).toBe("https://claude.ai/code/session_01UkUMdpnkpY7ZWnDBue2gVx");
+    send("PostToolUse", { tool_name: "Bash", tool_use_id: "t1" });
+    expect(urlOf(db, now())).toBe("https://claude.ai/code/session_01UkUMdpnkpY7ZWnDBue2gVx");
+    send("Stop", { remote_session_id: null });
+    expect(urlOf(db, now())).toBeNull();
+  });
+
+  test("形式の合わない値は使わない", () => {
+    const { db, send, now } = setup();
+    send("UserPromptSubmit", { prompt: "x", remote_session_id: "javascript:alert(1)" });
+    expect(urlOf(db, now())).toBeNull();
+  });
+});

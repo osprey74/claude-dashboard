@@ -4,7 +4,7 @@
 //   kanseishitsu-agent setup [--apply]     設定と Claude Code への登録
 
 import { redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishitsu/shared";
-import { hostInfo, loadConfig, log, post, readStdinJson, truncateDeep } from "./common";
+import { hostInfo, loadConfig, log, post, readStdinJson, remoteSessionId, truncateDeep } from "./common";
 import { setup } from "./setup";
 import { statuslinePayload, statusText } from "./statusline";
 import { modelFromTranscript } from "./transcript";
@@ -23,6 +23,9 @@ async function runHook(event: string): Promise<void> {
     const m = modelFromTranscript(payload.agent_transcript_path, undefined, true);
     if (m) payload.subagent_model_from_transcript = m;
   }
+  // Remote Control の URL 用。セッションの記録が見つからないときは送らない（サーバー側の値を消さない）
+  const remote = remoteSessionId(payload.session_id);
+  if (remote !== undefined) payload.remote_session_id = remote;
   const body: HookIngest = {
     event: event || String(payload.hook_event_name ?? "unknown"),
     host: hostInfo(cfg),
@@ -44,7 +47,7 @@ async function runStatusline(): Promise<void> {
   if (!cfg) return;
   const body: StatuslineIngest = {
     host: hostInfo(cfg),
-    payload: statuslinePayload(payload),
+    payload: statuslinePayload(payload, remoteSessionId(payload.session_id)),
     sentAt: new Date().toISOString(),
   };
   await post(cfg, "/api/ingest/statusline", body);

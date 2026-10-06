@@ -65,3 +65,15 @@ export function todosFromInput(toolInput: Record<string, unknown> | undefined): 
     return [{ label, status }];
   });
 }
+
+// Remote Control：~/.claude/sessions/<pid>.json の bridgeSessionId（session_…）が URL の末尾になる。
+// 公開されていない内部ファイルのため、形式が合わない値は使わない
+const REMOTE_SESSION_ID = /^session_[A-Za-z0-9]{8,64}$/;
+
+export function remoteControlUrl(remoteSessionId: string | null | undefined): string | null {
+  return remoteSessionId && REMOTE_SESSION_ID.test(remoteSessionId) ? `https://claude.ai/code/${remoteSessionId}` : null;
+}
+
+export function isRemoteSessionId(v: unknown): v is string {
+  return typeof v === "string" && REMOTE_SESSION_ID.test(v);
+}

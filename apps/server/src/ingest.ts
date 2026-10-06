@@ -5,6 +5,7 @@ import {
   AGENT_TOOLS,
   codexModel,
   isCodexCall,
+  isRemoteSessionId,
   modelLabel,
   todosFromInput,
   projectFromCwd,
@@ -81,6 +82,7 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
     } else {
       updateSession(db, host, sessionId, existing, change, cwd, model, at);
     }
+    recordRemote(db, sessionId, payload);
     trackDetails(db, sessionId, event, payload, at);
   })();
 }
@@ -120,6 +122,16 @@ function updateSession(
       endedAt,
       sessionId,
     );
+}
+
+/**
+ * エージェント v0.3.2 以降は、Claude Code のセッションの記録が見つかれば remote_session_id を送る（Remote Control が無効なら null）。
+ * 項目がない（旧版のエージェント、または記録が見つからない）ときは記録を変えない
+ */
+function recordRemote(db: Database, sessionId: string, payload: Record<string, unknown>): void {
+  if (!("remote_session_id" in payload)) return;
+  const v = payload.remote_session_id;
+  db.query("UPDATE sessions SET remote_session_id = ? WHERE session_id = ?").run(isRemoteSessionId(v) ? v : null, sessionId);
 }
 
 const RESULT_MAX = 4000;
@@ -270,6 +282,7 @@ export function processStatusline(db: Database, host: HostRow, body: StatuslineI
            WHERE session_id = ?`,
         ).run(label, ctx, at, sessionId);
       }
+      recordRemote(db, sessionId, p);
     }
 
     const rl = obj(p.rate_limits);

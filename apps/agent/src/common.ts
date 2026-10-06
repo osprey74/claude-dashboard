@@ -1,7 +1,7 @@
 // エージェント共通処理。最優先は「Claude Code の動作を絶対に妨げない」こと：
 // 失敗しても再送せず、標準出力に余計なものを出さず、終了コード 0 で終える。
 
-import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync } from "node:fs";
 import { homedir, hostname, platform, release } from "node:os";
 import { join } from "node:path";
 import type { HostInfo } from "@kanseishitsu/shared";
@@ -101,4 +101,29 @@ export async function post(cfg: AgentConfig, path: string, body: unknown): Promi
   } catch (e) {
     log(`POST ${path} failed: ${e instanceof Error ? e.name + ": " + e.message : String(e)}`);
   }
+}
+
+/**
+ * このセッションの Remote Control のセッション ID（session_…）。
+ * Claude Code は動いているセッションごとに ~/.claude/sessions/<pid>.json を書き、/remote-control が有効な間は
+ * bridgeSessionId を持つ（公開されていない内部ファイル。2.1.291 で確認）。無効なら null、ファイルが見つからなければ undefined
+ */
+export function remoteSessionId(sessionId: unknown): string | null | undefined {
+  if (typeof sessionId !== "string" || !sessionId) return undefined;
+  const dir = join(process.env.CLAUDE_CONFIG_DIR || join(homedir(), ".claude"), "sessions");
+  try {
+    const files = readdirSync(dir).filter((f) => /^\d+\.json$/.test(f)).slice(0, 64);
+    for (const f of files) {
+      try {
+        const s = JSON.parse(readFileSync(join(dir, f), "utf8")) as Record<string, unknown>;
+        if (s.sessionId !== sessionId) continue;
+        return typeof s.bridgeSessionId === "string" && s.bridgeSessionId ? s.bridgeSessionId : null;
+      } catch {
+        // 書き込み途中のファイルなどは飛ばす
+      }
+    }
+  } catch {
+    // sessions ディレクトリがない
+  }
+  return undefined;
 }

@@ -48,6 +48,8 @@ export interface SessionView {
   ctxPct: number | null;
   startedAt: string;
   lastEventAt: string;
+  /** Remote Control の URL。このセッションで /remote-control が有効でなければ null */
+  remoteUrl: string | null;
   /** 直近のプロンプト以降に起動した、または稼働中のプレイヤー */
   players: PlayerView[];
 }
