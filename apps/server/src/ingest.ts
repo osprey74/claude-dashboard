@@ -1,7 +1,7 @@
 // hooks・statusLine の受信内容を保存し、セッション状態を更新する
 
 import type { Database } from "bun:sqlite";
-import { recordTouch } from "./alerts";
+import { recordDanger, recordTouch, trackDangerOutcome } from "./alerts";
 import {
   AGENT_TOOLS,
   codexModel,
@@ -86,6 +86,8 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
     recordRemote(db, sessionId, payload);
     trackDetails(db, sessionId, event, payload, at);
     if (event === "PostToolUse") recordTouch(db, host.host_id, sessionId, payload, at);
+    if (event === "GuardHit") recordDanger(db, host.host_id, sessionId, payload, at);
+    else trackDangerOutcome(db, sessionId, event, str(payload.tool_use_id), at);
   })();
 }
 

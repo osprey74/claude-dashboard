@@ -17,6 +17,8 @@ export interface AgentConfig {
   hostLabel?: string;
   /** 送信タイムアウト（ミリ秒） */
   timeoutMs?: number;
+  /** 危険操作のガード：ask＝許可ダイアログに回す（既定）、log＝記録だけ、off＝判定しない */
+  guardMode?: "ask" | "log" | "off";
 }
 
 export function loadConfig(): AgentConfig | null {

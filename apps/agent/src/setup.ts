@@ -58,6 +58,9 @@ export function desiredEntries(binPath: string) {
     // args を指定するとシェルを通さずに直接起動される（Windows のパス問題を避けられる）
     hooks[ev] = [{ hooks: [{ type: "command", command: cmd, args: ["hook", ev], async: true, timeout: 5 }] }];
   }
+  // 危険操作のガード：Claude Code が結果を待つ同期の登録。既定の待ち時間（600秒）は長すぎるため 5 秒にする。
+  // 時間切れのときは結果が捨てられ、ふつうの許可の流れに戻る（止まらない）
+  hooks.PreToolUse!.push({ matcher: "Bash|PowerShell", hooks: [{ type: "command", command: cmd, args: ["guard"], timeout: 5 }] });
   // statusLine は args を持たないためシェル経由で起動される。空白を含むパスだけ引用符で囲む
   const statusCommand = (/\s/.test(cmd) ? `"${cmd}"` : cmd) + " statusline";
   return { hooks, statusLine: { type: "command", command: statusCommand, padding: 0 }, cmd };
@@ -78,18 +81,28 @@ export function mergeSettings(
   const changes: string[] = [];
   const warnings: string[] = [];
   next.hooks ??= {};
+  // 登録は「呼び出し先」と「サブコマンド（hook・guard）」の組で見分ける
+  const sub = (h: HookHandler) => h.args?.[0] ?? "";
   for (const [ev, groups] of Object.entries(want.hooks)) {
     const existing = next.hooks[ev] ?? [];
-    const already = existing.some((g) => g.hooks?.some((h) => slashPath(h.command ?? "") === want.cmd));
     const isLegacy = (g: MatcherGroup) => g.hooks?.some((h) => legacy.includes(slashPath(h.command ?? "")));
-    const kept = existing.filter((g) => !isLegacy(g));
-    if (already && kept.length === existing.length) continue;
-    next.hooks[ev] = already ? kept : [...kept, ...groups];
-    changes.push(
-      kept.length < existing.length
-        ? `hooks.${ev} の登録を ${want.cmd} の呼び出しに置き換え`
-        : `hooks.${ev} に追加（既存 ${existing.length} 件はそのまま）`,
-    );
+    let list = existing.filter((g) => !isLegacy(g));
+    const replaced = list.length < existing.length;
+    const added: string[] = [];
+    for (const g of groups) {
+      const h = g.hooks![0]!;
+      const already = list.some((x) => x.hooks?.some((y) => slashPath(y.command ?? "") === want.cmd && sub(y) === sub(h)));
+      if (already) continue;
+      list = [...list, g];
+      added.push(sub(h));
+    }
+    if (!replaced && added.length === 0) continue;
+    next.hooks[ev] = list;
+    if (replaced) changes.push(`hooks.${ev} の登録を ${want.cmd} の呼び出しに置き換え`);
+    else
+      changes.push(
+        `hooks.${ev} に追加${added.includes("guard") ? "（危険操作のガード）" : ""}（既存 ${existing.length} 件はそのまま）`,
+      );
   }
   const sl = next.statusLine;
   const slLegacy = sl && legacy.some((p) => [p, `"${p}"`].some((q) => slashPath(sl.command ?? "") === `${q} statusline`));

@@ -112,3 +112,39 @@ describe("ファイル競合", () => {
     expect(openAlerts(db).length).toBe(1);
   });
 });
+
+describe("危険操作", () => {
+  const hit = (toolUseId: string) => ({
+    tool_name: "Bash",
+    tool_use_id: toolUseId,
+    tool_input: { command: "git push --force origin main" },
+    guard: { id: "git-push-force", label: "git push の強制上書き（--force）", mode: "ask" },
+  });
+
+  test("GuardHit でアラートを出し、通知の対象にし、実行されたら記録する", () => {
+    const { db, send, evaluate } = setup();
+    send("PreToolUse", { tool_name: "Bash", tool_use_id: "t1", tool_input: { command: "git push --force origin main" } });
+    send("GuardHit", hit("t1"));
+    const { opened } = evaluate();
+    expect(opened.length).toBe(1);
+    expect(openAlerts(db)[0]).toMatchObject({
+      kind: "danger",
+      guardLabel: "git push の強制上書き（--force）",
+      command: "git push --force origin main",
+      guardMode: "ask",
+      outcome: "pending",
+    });
+    send("PostToolUse", { tool_name: "Bash", tool_use_id: "t1" });
+    expect(openAlerts(db)[0]?.outcome).toBe("executed");
+    // 放置・競合の評価では消えない（利用者が閉じるまで残す）
+    evaluate();
+    expect(openAlerts(db).length).toBe(1);
+  });
+
+  test("実行されないままターンが終われば「実行されず」にする", () => {
+    const { db, send } = setup();
+    send("GuardHit", hit("t2"));
+    send("Stop", {});
+    expect(openAlerts(db)[0]?.outcome).toBe("not_executed");
+  });
+});

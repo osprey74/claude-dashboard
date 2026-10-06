@@ -133,8 +133,13 @@ export interface AlertView {
   /** 競合：ファイルと、編集した担当の表示名 */
   path?: string;
   actors?: string[];
-  /** 放置の Remote Control 用 */
+  /** 放置・危険操作の Remote Control 用 */
   remoteUrl?: string | null;
+  /** 危険操作：判定の説明、コマンド（伏せ字化・切り詰め済み）、扱い（ask＝許可ダイアログに回した、log＝記録のみ）、その後 */
+  guardLabel?: string;
+  command?: string;
+  guardMode?: "ask" | "log";
+  outcome?: "pending" | "executed" | "failed" | "not_executed";
   createdAt: string;
 }
 

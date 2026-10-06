@@ -41,6 +41,61 @@ export function recordTouch(
   );
 }
 
+/** 新しく作った危険操作のアラート。次の評価でプッシュ通知に回す */
+const pendingOpened: number[] = [];
+
+/** エージェントの guard が送る GuardHit から、危険操作のアラートを作る */
+export function recordDanger(
+  db: Database,
+  hostId: string,
+  sessionId: string,
+  payload: Record<string, unknown>,
+  at: string,
+): void {
+  const g = payload.guard as { id?: unknown; label?: unknown; mode?: unknown } | undefined;
+  const toolUseId = typeof payload.tool_use_id === "string" ? payload.tool_use_id : `${sessionId}:${at}`;
+  const input = payload.tool_input as Record<string, unknown> | undefined;
+  const command = typeof input?.command === "string" ? input.command : "";
+  const detail = {
+    guardId: String(g?.id ?? ""),
+    guardLabel: String(g?.label ?? "危険操作"),
+    guardMode: g?.mode === "log" ? "log" : "ask",
+    command: command.length > 300 ? command.slice(0, 300) + "…" : command,
+    toolUseId,
+    outcome: "pending",
+  };
+  const r = db
+    .query(
+      `INSERT INTO alerts (key, kind, host_id, session_id, detail_json, state, created_at, updated_at)
+       VALUES (?, 'danger', ?, ?, ?, 'open', ?, ?)`,
+    )
+    .run(`danger:${toolUseId}`, hostId, sessionId, JSON.stringify(detail), at, at);
+  pendingOpened.push(Number(r.lastInsertRowid));
+}
+
+/** 危険操作のその後：そのツールが実行・失敗したか、実行されないままターンが進んだか */
+export function trackDangerOutcome(db: Database, sessionId: string, event: string, toolUseId: string | undefined, at: string): void {
+  const rows = db
+    .query<{ alert_id: number; detail_json: string }, [string]>(
+      `SELECT alert_id, detail_json FROM alerts WHERE kind = 'danger' AND session_id = ? AND state IN ('open', 'dismissed')
+       AND json_extract(detail_json, '$.outcome') = 'pending'`,
+    )
+    .all(sessionId);
+  for (const r of rows) {
+    const d = JSON.parse(r.detail_json) as Record<string, unknown>;
+    let outcome: string | null = null;
+    if (toolUseId && d.toolUseId === toolUseId && event === "PostToolUse") outcome = "executed";
+    else if (toolUseId && d.toolUseId === toolUseId && event === "PostToolUseFailure") outcome = "failed";
+    else if (event === "UserPromptSubmit" || event === "Stop" || event === "SessionEnd") outcome = "not_executed";
+    if (!outcome) continue;
+    db.query("UPDATE alerts SET detail_json = ?, updated_at = ? WHERE alert_id = ?").run(
+      JSON.stringify({ ...d, outcome }),
+      at,
+      r.alert_id,
+    );
+  }
+}
+
 interface Wanted {
   key: string;
   kind: AlertKind;
@@ -110,7 +165,8 @@ export function evaluateAlerts(db: Database, cfg: ServerConfig, now = new Date()
   const at = now.toISOString();
   const wanted = [...idleAlerts(db, cfg, now), ...conflictAlerts(db, cfg, now)];
   let changed = false;
-  const opened: number[] = [];
+  const opened: number[] = pendingOpened.splice(0);
+  if (opened.length > 0) changed = true;
   db.transaction(() => {
     const active = db
       .query<{ alert_id: number; key: string; state: string; detail_json: string }, []>(
@@ -160,6 +216,10 @@ export function alertPushMessage(a: AlertView, idleMin: number): { title: string
     const what = a.waitText?.split(" ・ ")[0] ?? "応答待ち";
     return { title: "放置アラート", body: `${where} の${what}が ${idleMin}分以上続いています`, url, tag: `alert-${a.alertId}` };
   }
+  if (a.kind === "danger") {
+    const how = a.guardMode === "log" ? "を検知しました（記録のみ）" : "の許可を求めています";
+    return { title: "危険操作", body: `${where} が ${a.guardLabel}${how}`, url, tag: `alert-${a.alertId}` };
+  }
   const file = (a.path ?? "").split(/[\\/]/).pop() ?? "";
   return { title: "ファイル競合", body: `${where} で ${file} を複数の担当が編集しています`, url, tag: `alert-${a.alertId}` };
 }
@@ -204,6 +264,12 @@ export function openAlerts(db: Database): AlertView[] {
     if (r.kind === "idle") {
       view.waitText = String(d.waitText ?? "");
       view.waitingSince = String(d.waitingSince ?? r.created_at);
+      view.remoteUrl = remoteControlUrl(r.remote_session_id);
+    } else if (r.kind === "danger") {
+      view.guardLabel = String(d.guardLabel ?? "");
+      view.command = String(d.command ?? "");
+      view.guardMode = d.guardMode === "log" ? "log" : "ask";
+      view.outcome = (d.outcome as AlertView["outcome"]) ?? "pending";
       view.remoteUrl = remoteControlUrl(r.remote_session_id);
     } else if (r.kind === "conflict") {
       view.path = String(d.path ?? "");

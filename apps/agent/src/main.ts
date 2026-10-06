@@ -1,9 +1,10 @@
 // Claude 管制室 PC 側エージェント
 //   kanseishitsu-agent hook <イベント名>   hooks から呼ばれる
 //   kanseishitsu-agent statusline          statusLine から呼ばれる
+//   kanseishitsu-agent guard               PreToolUse（同期）から呼ばれる危険操作の判定
 //   kanseishitsu-agent setup [--apply]     設定と Claude Code への登録
 
-import { redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishitsu/shared";
+import { guardCheck, redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishitsu/shared";
 import { hostInfo, loadConfig, log, post, readStdinJson, remoteSessionId, truncateDeep } from "./common";
 import { setup } from "./setup";
 import { statuslinePayload, statusText } from "./statusline";
@@ -35,6 +36,49 @@ async function runHook(event: string): Promise<void> {
   await post(cfg, "/api/ingest/hook", body);
 }
 
+/**
+ * PreToolUse（同期）から呼ばれる危険操作の判定。判定は手元で行い、当たらなければ何も出さずにすぐ終わる。
+ * 当たれば許可ダイアログに回す JSON を先に出し、そのあとで Mac Mini に知らせる
+ */
+async function runGuard(): Promise<void> {
+  const payload = await readStdinJson();
+  const cfg = loadConfig();
+  const mode = cfg?.guardMode ?? "ask";
+  if (mode === "off") return;
+  const input = payload.tool_input as Record<string, unknown> | undefined;
+  const hit = guardCheck(typeof payload.tool_name === "string" ? payload.tool_name : undefined, input);
+  if (!hit) return;
+  if (mode === "ask") {
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "PreToolUse",
+          permissionDecision: "ask",
+          permissionDecisionReason: `Claude 管制室：${hit.label}に当たるため、実行してよいか確認してください`,
+        },
+      }) + "\n",
+    );
+  }
+  if (!cfg) return;
+  const body: HookIngest = {
+    event: "GuardHit",
+    host: hostInfo(cfg),
+    payload: redactDeep(
+      truncateDeep({
+        session_id: payload.session_id,
+        cwd: payload.cwd,
+        tool_name: payload.tool_name,
+        tool_use_id: payload.tool_use_id,
+        tool_input: { command: input?.command },
+        agent_id: payload.agent_id,
+        guard: { ...hit, mode },
+      }),
+    ),
+    sentAt: new Date().toISOString(),
+  };
+  await post(cfg, "/api/ingest/hook", body);
+}
+
 async function runStatusline(): Promise<void> {
   const payload = await readStdinJson();
   // 表示を先に出す。新しい更新が来ると実行中のスクリプトは中断されるため、送信は後回しにする
@@ -57,6 +101,7 @@ const [cmd, arg] = process.argv.slice(2);
 try {
   if (cmd === "hook") await runHook(arg ?? "");
   else if (cmd === "statusline") await runStatusline();
+  else if (cmd === "guard") await runGuard();
   else if (cmd === "setup") await setup(process.argv.slice(3));
   else console.log("usage: kanseishitsu-agent hook <event> | statusline | setup [--apply]");
 } catch (e) {

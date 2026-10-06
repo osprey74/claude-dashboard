@@ -10,6 +10,13 @@ const TITLE: Record<AlertView["kind"], string> = {
   danger: "危険操作",
 };
 
+const OUTCOME: Record<NonNullable<AlertView["outcome"]>, string> = {
+  pending: "許可待ち",
+  executed: "許可されて実行",
+  failed: "実行して失敗",
+  not_executed: "実行されず",
+};
+
 function minutes(fromIso: string | undefined, now: Date): number {
   if (!fromIso) return 0;
   return Math.max(0, Math.floor((now.getTime() - Date.parse(fromIso)) / 60000));
@@ -53,7 +60,7 @@ export function AlertList({
       {alerts.map((a) => {
         const where = `${a.hostLabel}${a.project ? " / " + a.project : ""}`;
         return (
-          <div key={a.alertId} className="alert-row">
+          <div key={a.alertId} className={`alert-row kind-${a.kind}`}>
             <Indicator status={a.kind === "danger" ? "err" : "wait"} size={16} />
             <span className="alert-title">{TITLE[a.kind]}</span>
             <span className="alert-msg">
@@ -61,6 +68,14 @@ export function AlertList({
                 <>
                   {where} の{a.waitText?.split(" ・ ")[0] ?? "応答待ち"}が{" "}
                   <span className="alert-em">{minutes(a.waitingSince, now)}分</span> 続いています（しきい値 {idleMin}分）
+                </>
+              )}
+              {a.kind === "danger" && (
+                <>
+                  {where} で{a.guardLabel}を検知し、
+                  {a.guardMode === "log" ? "記録しました（止めていません）" : "実行してよいか確認を求めました"}{" "}
+                  <code className="mono">{a.command}</code>
+                  {a.guardMode !== "log" && <span className={`alert-outcome outcome-${a.outcome}`}>{OUTCOME[a.outcome ?? "pending"]}</span>}
                 </>
               )}
               {a.kind === "conflict" && (
@@ -71,6 +86,11 @@ export function AlertList({
               )}
             </span>
             <span className="alert-actions">
+              {a.kind === "danger" && a.guardMode !== "log" && a.outcome === "pending" && a.remoteUrl && (
+                <a className="alert-btn primary" href={a.remoteUrl} target="_blank" rel="noreferrer">
+                  Remote Control で応答
+                </a>
+              )}
               {a.kind === "idle" && a.remoteUrl && (
                 <a className="alert-btn primary" href={a.remoteUrl} target="_blank" rel="noreferrer">
                   Remote Control で応答

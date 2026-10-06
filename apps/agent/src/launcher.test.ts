@@ -29,6 +29,16 @@ describe("mergeSettings", () => {
     expect(mergeSettings(next, LAUNCH, [BIN]).changes).toEqual([]);
   });
 
+  test("登録済みの PreToolUse に、危険操作のガードを別の登録として足す", () => {
+    const hook = { hooks: [{ type: "command", command: LAUNCH, args: ["hook", "PreToolUse"], async: true, timeout: 5 }] };
+    const { next, changes } = mergeSettings({ hooks: { PreToolUse: [hook] } }, LAUNCH, [BIN]);
+    expect(next.hooks!.PreToolUse).toEqual([
+      hook,
+      { matcher: "Bash|PowerShell", hooks: [{ type: "command", command: LAUNCH, args: ["guard"], timeout: 5 }] },
+    ]);
+    expect(changes).toContain("hooks.PreToolUse に追加（危険操作のガード）（既存 1 件はそのまま）");
+  });
+
   test("独自の statusLine は置き換えない", () => {
     const current = { statusLine: { type: "command", command: "~/my-status.sh" } };
     const { next, warnings } = mergeSettings(current, LAUNCH, [BIN]);
@@ -79,6 +89,35 @@ describe.skipIf(process.platform === "win32")("起動役", () => {
     } finally {
       await Bun.$`pkill -f ${dir}`.nothrow().quiet();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("guard：判定の結果を返す", async () => {
+    const dir = setupDir(`cat >/dev/null; echo '{"hookSpecificOutput":{"permissionDecision":"ask"}}'; sleep 3`);
+    try {
+      const r = await run(dir, ["guard"], "{}");
+      expect(r.out).toBe('{"hookSpecificOutput":{"permissionDecision":"ask"}}\n');
+      expect(r.ms).toBeLessThan(1000);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("guard：当たらずに終われば何も返さない。止まったら約3秒で打ち切って通す", async () => {
+    const quick = setupDir(`cat >/dev/null`);
+    const stuck = setupDir(`sleep 10`);
+    try {
+      const a = await run(quick, ["guard"], "{}");
+      expect(a.out).toBe("");
+      expect(a.ms).toBeLessThan(1000);
+      const b = await run(stuck, ["guard"], "{}");
+      expect(b.out).toBe("");
+      expect(b.ms).toBeGreaterThan(2500);
+      expect(b.ms).toBeLessThan(4500);
+    } finally {
+      await Bun.$`pkill -f ${stuck}`.nothrow().quiet();
+      rmSync(quick, { recursive: true, force: true });
+      rmSync(stuck, { recursive: true, force: true });
     }
   });
 

@@ -14,7 +14,7 @@ export const LAUNCHER_SH = `#!/bin/sh
 AGENT="$(dirname "$0")/kanseishitsu-agent"
 
 # 止まったエージェントが溜まっているときは起動しない
-running=$(/usr/bin/pgrep -f "$AGENT (hook|statusline)" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
+running=$(/usr/bin/pgrep -f "$AGENT (hook|statusline|guard)" | /usr/bin/wc -l | /usr/bin/tr -d ' ')
 [ "\${running:-0}" -lt ${MAX_RUNNING} ] && ok=1 || ok=0
 
 # 非対話のシェルでは & で起動したコマンドの標準入力が /dev/null になるため、fd 3 に退避して渡す
@@ -25,6 +25,18 @@ case "$1" in
     # 「[ ] && cmd &」と書くと間に入るサブシェルが標準出力を握ったまま残るため、if で単純コマンドとして起動する
     if [ $ok = 1 ]; then
       "$AGENT" "$@" <&3 >/dev/null 2>&1 3<&- &
+    fi
+    exit 0
+    ;;
+  guard)
+    # 危険操作の判定。Claude Code はこの結果を待つため、最大3秒で打ち切り、間に合わなければ何も出さずに通す
+    if [ $ok = 1 ] && out=$(/usr/bin/mktemp -t kanseishitsu); then
+      "$AGENT" guard <&3 >"$out" 2>/dev/null 3<&- &
+      pid=$!
+      i=0
+      while [ $i -lt 60 ] && /bin/kill -0 $pid 2>/dev/null && [ ! -s "$out" ]; do /bin/sleep 0.05; i=$((i + 1)); done
+      /bin/cat "$out"
+      /bin/rm -f "$out"
     fi
     exit 0
     ;;
