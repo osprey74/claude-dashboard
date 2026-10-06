@@ -30,6 +30,8 @@ export interface ServerConfig {
   sessionDays: number;
   /** 物理表示灯（USB シリアル）。serialPath がなければ /dev/cu.usbserial-* が1つだけのときに自動で使う。enabled: false で止める */
   device?: { enabled?: boolean; serialPath?: string };
+  /** 記録を残す日数。これより古いイベント・プロンプト・利用枠・費用・解消済みのアラート・セッションは消す */
+  retentionDays: number;
   /** Web Push の署名鍵（初回起動時に生成） */
   vapid: { publicKey: string; privateKey: string };
 }
@@ -45,6 +47,7 @@ const DEFAULTS: Omit<ServerConfig, "sessionSecret" | "vapid"> = {
   thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
   passwordHash: null,
   sessionDays: 30,
+  retentionDays: 15,
 };
 
 export function loadConfig(): ServerConfig {

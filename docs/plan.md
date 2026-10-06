@@ -39,7 +39,7 @@
 | フェーズ3（指示送信） | 組織の Owner による Channel の有効化と、ISMS 上の確認待ち |
 | Cowork の OTel 受信 | 組織の管理者による送信先の設定待ち |
 | エージェントの更新 | sasao-pc-1（v0.2.0）と sohshimacbook-air-1（未接続）は、次に作業するときに v0.4.2 へ差し替えて `setup --apply` |
-| データの保持期間 | 未決。events・prompts・alerts・費用の記録は削除されずにたまる。プロンプト本文を含むため、ISMS の観点からも期間を決めて自動削除を入れる |
+| データの保持期間 | 決定：15日（2026-10-06）。サーバーが起動時と6時間ごとに、15日より前のイベント・プロンプト・利用枠・費用・解消済みのアラートと、最後のイベントから15日たったセッションを消す。PC の登録・通知の購読・未対応のアラートは残す。日数はサーバーの設定（`retentionDays`）で変えられる |
 | 本番での確認 | 放置アラートは試験のみ（本番で10分の許可待ちは未確認）。Codex CLI は検知用のダミーでのみ確認 |
 | 既知のリスク | Bun 製の実行ファイルが止まる原因は不明（起動役で Claude Code への影響は防いだ）。Remote Control の URL は非公開の内部ファイルから読むため、Claude Code の版によって使えなくなる可能性がある |
 
@@ -129,7 +129,7 @@ Mac Mini は個人の Tailscale に参加させ、マシン共有で会社の Ta
 | alerts | alert_id, kind（danger / conflict / idle / offline）, session_id, detail_json, state, created_at | アラート欄 |
 | outbox | command_id, session_id, text, state（queued / delivered / acked）, created_at | 指示の送信キュー |
 
-- 未決事項：events と prompts の保持期間（何日分残すか）を決める必要があります。
+- 決定（2026-10-06）：保持期間は15日です（冒頭の「残っている作業と未決事項」を参照）。
 
 ## 収集側の仕様
 

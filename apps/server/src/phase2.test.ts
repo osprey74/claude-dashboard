@@ -14,6 +14,7 @@ const cfg: ServerConfig = {
   passwordHash: null,
   sessionSecret: "x",
   sessionDays: 1,
+  retentionDays: 15,
   vapid: { publicKey: "x", privateKey: "x" },
 };
 

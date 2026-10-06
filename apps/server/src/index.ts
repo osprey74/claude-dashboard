@@ -20,6 +20,7 @@ import { alertPushMessage, dismissAlert, evaluateAlerts, openAlerts } from "./al
 import { deleteSubscription, saveSubscription, sendPush } from "./push";
 import { DB_PATH, loadConfig } from "./config";
 import { DeviceLink, deviceLine } from "./device";
+import { purgeOld } from "./retention";
 import { openDb } from "./db";
 import { lastStatusline, processHook, processStatusline } from "./ingest";
 import { loginPage } from "./login-page";
@@ -35,6 +36,19 @@ const WEB_DIST = join(import.meta.dir, "..", "..", "web", "dist");
 let server: ReturnType<typeof Bun.serve> | null = null;
 let lastKey = "";
 let broadcastTimer: ReturnType<typeof setTimeout> | null = null;
+
+// 保持期間を過ぎた記録を、起動時と 6 時間ごとに消す
+function purge(): void {
+  try {
+    const n = purgeOld(db, cfg.retentionDays);
+    const total = Object.values(n).reduce((a, b) => a + b, 0);
+    if (total > 0) console.log(`[retention] ${cfg.retentionDays}日より前の記録を削除: ${JSON.stringify(n)}`);
+  } catch (e) {
+    console.error("[retention] failed", e);
+  }
+}
+purge();
+setInterval(purge, 6 * 3600_000);
 const device = cfg.device?.enabled === false ? null : new DeviceLink(cfg.device?.serialPath);
 // 表示灯は 45 秒届かないと「途切れた」表示にするため、変化がなくても 10 秒ごとに送る
 setInterval(() => device?.update(deviceLine(buildSnapshot(db, cfg))), 10_000);
