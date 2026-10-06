@@ -10,28 +10,34 @@ import { openDb } from "./db";
 
 const [cmd, arg] = process.argv.slice(2);
 
-async function readHidden(question: string): Promise<string> {
+// for await で読むと抜けた時点で stdin が閉じられ、2回目の入力が読めなくなるため、data イベントで1行ずつ読む
+function readHidden(question: string): Promise<string> {
   process.stdout.write(question);
   const stdin = process.stdin;
-  if (!stdin.isTTY) {
-    for await (const chunk of stdin) return String(chunk).split(/\r?\n/)[0] ?? "";
-    return "";
-  }
-  stdin.setRawMode(true);
+  const tty = stdin.isTTY;
+  if (tty) stdin.setRawMode(true);
+  stdin.resume();
   let buf = "";
-  for await (const chunk of stdin) {
-    for (const ch of String(chunk)) {
-      if (ch === "\r" || ch === "\n") {
-        stdin.setRawMode(false);
-        process.stdout.write("\n");
-        return buf;
+  return new Promise((resolve) => {
+    const onData = (chunk: Buffer | string) => {
+      for (const ch of String(chunk)) {
+        if (ch === "\r" || ch === "\n") {
+          stdin.off("data", onData);
+          stdin.pause();
+          if (tty) {
+            stdin.setRawMode(false);
+            process.stdout.write("\n");
+          }
+          resolve(buf);
+          return;
+        }
+        if (ch === "\u0003") process.exit(130);
+        if (ch === "\u007f") buf = buf.slice(0, -1);
+        else buf += ch;
       }
-      if (ch === "\u0003") process.exit(130);
-      if (ch === "\u007f") buf = buf.slice(0, -1);
-      else buf += ch;
-    }
-  }
-  return buf;
+    };
+    stdin.on("data", onData);
+  });
 }
 
 switch (cmd) {
