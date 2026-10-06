@@ -7,11 +7,17 @@ import { redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishits
 import { hostInfo, loadConfig, log, post, readStdinJson, truncateDeep } from "./common";
 import { setup } from "./setup";
 import { statuslinePayload, statusText } from "./statusline";
+import { modelFromTranscript } from "./transcript";
 
 async function runHook(event: string): Promise<void> {
   const payload = await readStdinJson();
   const cfg = loadConfig();
   if (!cfg) return;
+  // hooks の入力に model がない場合は、会話記録から直近のモデルを補う
+  if (!payload.model && typeof payload.transcript_path === "string" && event !== "SessionEnd") {
+    const m = modelFromTranscript(payload.transcript_path);
+    if (m) payload.model_from_transcript = m;
+  }
   const body: HookIngest = {
     event: event || String(payload.hook_event_name ?? "unknown"),
     host: hostInfo(cfg),

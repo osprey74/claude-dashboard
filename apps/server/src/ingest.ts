@@ -55,7 +55,7 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
       .get(sessionId);
     const change = statusFromHook(event, payload, existing && !existing.ended_at ? existing.status : null);
     const cwd = str(payload.cwd) ?? null;
-    const model = modelLabel(str(payload.model)) ?? null;
+    const model = modelLabel(str(payload.model) ?? str(payload.model_from_transcript)) ?? null;
 
     if (!existing) {
       const st = change ?? { status: "wait" as const, statusText: "状態未取得" };
