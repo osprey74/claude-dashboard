@@ -188,7 +188,8 @@ h1, h2 { margin: 0; }
 .detail-section h3 { margin: 0; font-size: 13px; color: var(--sub); font-weight: 700; }
 .player-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; background: var(--tile); border-radius: 10px; padding: 8px 10px; }
 .player-main { display: flex; align-items: center; gap: 8px; font-size: 13px; min-width: 0; }
-.player-task { color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-name { flex: none; white-space: nowrap; }
+.player-task { color: var(--sub); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 .player-state { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--sub2); white-space: nowrap; }
 .prompt-box { background: #0f1624; border: 1px solid var(--line); border-radius: 10px; padding: 12px; font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 240px; overflow-y: auto; }
 .step { display: flex; align-items: center; gap: 10px; font-size: 13px; }

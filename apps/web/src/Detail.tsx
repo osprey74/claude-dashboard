@@ -85,7 +85,7 @@ export function DetailPanel({
             <div key={p.playerId} className="player-row">
               <span className="player-main">
                 <PlayerMark p={p} />
-                <span>{playerLabel(p)}</span>
+                <span className="player-name">{playerLabel(p)}</span>
                 {p.task && <span className="player-task">{p.task}</span>}
               </span>
               <span className="player-state">
