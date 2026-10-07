@@ -26,14 +26,7 @@ async function runHook(event: string): Promise<void> {
     if (m) payload.subagent_model_from_transcript = m;
   }
   // 消費内訳用：応答が終わるたびに、会話記録からモデルごとのトークン数の累計を送る（statusLine のない VS Code・Desktop のため）
-  if (event === "Stop" || event === "SubagentStop" || event === "SessionEnd") {
-    try {
-      const usage = sessionTokenUsage(payload.session_id, payload.transcript_path);
-      if (usage) payload.token_buckets = usage;
-    } catch (e) {
-      log(`token usage error: ${String(e)}`);
-    }
-  }
+  if (event === "Stop" || event === "SubagentStop") addTokenUsage(payload);
   // Remote Control の URL 用。セッションの記録が見つからないときは送らない（サーバー側の値を消さない）
   const remote = remoteSessionId(payload.session_id);
   if (remote !== undefined) payload.remote_session_id = remote;
@@ -49,6 +42,27 @@ async function runHook(event: string): Promise<void> {
     sentAt: new Date().toISOString(),
   };
   await post(cfg, "/api/ingest/hook", body);
+  // 終了時のフックは Claude Code に短時間で打ち切られる。会話記録が大きいと集計が間に合わず終了の知らせまで届かないため、
+  // 終了を先に送り、トークン数はあとから別のイベントとして送る（打ち切られても直前の Stop で送った分が残る）
+  if (event === "SessionEnd" && addTokenUsage(payload)) {
+    await post(cfg, "/api/ingest/hook", {
+      ...body,
+      event: "SessionUsage",
+      payload: { session_id: payload.session_id, token_buckets: payload.token_buckets },
+      sentAt: new Date().toISOString(),
+    });
+  }
+}
+
+function addTokenUsage(payload: Record<string, unknown>): boolean {
+  try {
+    const usage = sessionTokenUsage(payload.session_id, payload.transcript_path);
+    if (usage) payload.token_buckets = usage;
+    return !!usage;
+  } catch (e) {
+    log(`token usage error: ${String(e)}`);
+    return false;
+  }
 }
 
 /**

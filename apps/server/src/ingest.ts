@@ -46,6 +46,13 @@ export function processHook(db: Database, host: HostRow, body: HookIngest, now =
   db.transaction(() => {
     touchHost(db, host, body.host, at);
 
+    // 終了のあとにエージェントが別に送るトークン数（v0.4.4 以降）。セッションの状態は変えない
+    if (event === "SessionUsage") {
+      const buckets = obj(payload.token_buckets) as Record<string, Record<string, Partial<TokenCounts>>> | undefined;
+      if (sessionId && buckets) recordTranscriptCosts(db, host.host_id, sessionId, buckets, now);
+      return;
+    }
+
     db.query(
       "INSERT INTO events (session_id, host_id, type, tool_name, payload_json, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     ).run(sessionId, host.host_id, event, str(payload.tool_name) ?? null, JSON.stringify(payload), at);

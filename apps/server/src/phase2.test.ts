@@ -211,8 +211,22 @@ describe("SessionEnd が届かなかったセッション", () => {
       );
     const open = (at: string) =>
       buildSnapshot(db, cfg, new Date(at)).hosts[0]!.sessions.map((s) => s.sessionId);
-    return { send, open };
+    return { db, send, open };
   }
+
+  test("終了のあとに届くトークン数は、記録だけしてセッションを戻さない", () => {
+    const { db, send, open } = setupAt();
+    send("2026-10-06T13:00:00Z", "s1", "Stop");
+    send("2026-10-06T13:05:00Z", "s1", "SessionEnd", { reason: "other" });
+    send("2026-10-06T13:05:01Z", "s1", "SessionUsage", {
+      token_buckets: { "2026-10-06T12:50:00.000Z": { "claude-opus-5": { input: 10, output: 1000 } } },
+    });
+    expect(open("2026-10-06T13:05:02Z")).toEqual([]);
+    const rows = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM transcript_costs WHERE session_id = 's1'").get();
+    expect(rows?.n).toBe(1);
+    const ev = db.query<{ n: number }, []>("SELECT COUNT(*) AS n FROM events WHERE type = 'SessionUsage'").get();
+    expect(ev?.n).toBe(0);
+  });
 
   test("同じ PC の次のイベントで、動いていないセッションを終了にする", () => {
     const { send, open } = setupAt();

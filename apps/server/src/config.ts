@@ -44,7 +44,7 @@ export const DB_PATH = join(DATA_DIR, "kanseishitsu.db");
 const DEFAULTS: Omit<ServerConfig, "sessionSecret" | "vapid"> = {
   host: "127.0.0.1",
   port: 8790,
-  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 12 * 3600, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
+  thresholds: { ...DEFAULT_THRESHOLDS, hideIdleAfterSec: 2 * 3600, ctxWarnPct: 70, idleAlertSec: 600, conflictWindowSec: 600 },
   passwordHash: null,
   sessionDays: 30,
   retentionDays: 15,
