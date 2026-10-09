@@ -4,13 +4,14 @@ import { AlertList } from "./Alerts";
 import { DetailPanel } from "./Detail";
 import { History } from "./History";
 import { HostGrid } from "./Hosts";
+import { OfficeFloor } from "./Office";
 import { Indicator, LogoIcon } from "./Icons";
 import { PushToggle } from "./Push";
 import { UsageRow } from "./Usage";
 import { formatDateTime } from "./format";
 import { useLiveState, useNow, type Conn } from "./useLiveState";
 
-type Tab = "sessions" | "usage" | "history";
+type Tab = "sessions" | "office" | "usage" | "history";
 
 /** 画面の状態は URL のハッシュに持つ（スマホの「戻る」で詳細を閉じられるようにする） */
 function useRoute() {
@@ -18,7 +19,7 @@ function useRoute() {
     const h = location.hash.slice(1);
     const m = h.match(/^s=(.+)$/);
     return {
-      tab: (h === "usage" || h === "history" ? h : "sessions") as Tab,
+      tab: (h === "office" || h === "usage" || h === "history" ? h : "sessions") as Tab,
       selected: m ? decodeURIComponent(m[1]!) : null,
     };
   };
@@ -37,6 +38,30 @@ function useRoute() {
     setTab: (t: Tab) => go(t === "sessions" ? "" : t),
     close: () => (history.length > 1 ? history.back() : go("")),
   };
+}
+
+type View = "list" | "office";
+
+/** デスクトップでの「一覧／オフィス」の切り替え。URL のハッシュは選択中のセッションに使うため、見ている人のブラウザに覚えておく */
+const VIEW_KEY = "kanseishitsu.view";
+
+function useView(): [View, (v: View) => void] {
+  const [view, setView] = useState<View>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) === "office" ? "office" : "list";
+    } catch {
+      return "list";
+    }
+  });
+  const set = (v: View) => {
+    setView(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {
+      // 保存できなくても、この画面の間は切り替えたままにする
+    }
+  };
+  return [view, set];
 }
 
 function useIsMobile(): boolean {
@@ -62,6 +87,7 @@ export function App() {
   const now = useNow();
   const route = useRoute();
   const mobile = useIsMobile();
+  const [view, setView] = useView();
   const warnPct = state?.ui?.ctxWarnPct ?? 70;
   const selectedSession = findSession(state, route.selected);
   const version = state?.generatedAt ?? "";
@@ -86,6 +112,7 @@ export function App() {
     />
   );
 
+  const office = mobile ? route.tab === "office" : view === "office";
   const hosts = !state ? (
     <p className="empty">読み込み中…</p>
   ) : state.hosts.length === 0 ? (
@@ -93,6 +120,8 @@ export function App() {
       監視中の PC はまだありません。Mac Mini で <code>cli.ts add-host</code> を実行してトークンを発行し、PC 側で
       <code>agent setup</code> を行ってください。
     </p>
+  ) : office ? (
+    <OfficeFloor hosts={state.hosts} now={now} selected={route.selected} onSelect={route.select} />
   ) : (
     <HostGrid hosts={state.hosts} now={now} warnPct={warnPct} selected={route.selected} onSelect={route.select} />
   );
@@ -144,7 +173,14 @@ export function App() {
             <section className="hosts-section" aria-label="PCとセッション">
               <div className="section-head">
                 <h2>PC とセッション</h2>
-                <span className="section-hint">タイルを選ぶと右側に詳細を表示します</span>
+                <span className="section-hint">{view === "office" ? "机" : "タイル"}を選ぶと右側に詳細を表示します</span>
+                <div className="view-switch pills" role="group" aria-label="表示の切り替え">
+                  {VIEWS.map(([v, label]) => (
+                    <button key={v} type="button" className={`pill${view === v ? " active" : ""}`} aria-pressed={view === v} onClick={() => setView(v)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
               {hosts}
             </section>
@@ -221,8 +257,14 @@ function Footer() {
   );
 }
 
+const VIEWS: [View, string][] = [
+  ["list", "一覧"],
+  ["office", "オフィス"],
+];
+
 const NAV: [Tab, string, string][] = [
   ["sessions", "セッション", "M4 5h16v10H4zM8 19h8M12 15v4"],
+  ["office", "オフィス", "M3 20h18M5 20v-5h14v5M12 4a3 3 0 1 0 0 6a3 3 0 1 0 0-6"],
   ["usage", "利用枠", "M4 19V9M10 19V5M16 19v-7M22 19H2"],
   ["history", "履歴", "M12 7v5l3 2M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z"],
 ];
