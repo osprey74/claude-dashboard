@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>キャラクターの状態一覧</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&amp;family=BIZ+UDPGothic:wght@400;700&amp;family=JetBrains+Mono:wght@400;600&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#0B111C}
+.sprite *{transform-box:fill-box}
+@keyframes tap{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+.tapA{animation:tap .3s steps(1) infinite}
+.tapB{animation:tap .3s steps(1) infinite .15s}
+@keyframes blink{0%,90%,100%{opacity:1}93%,97%{opacity:0}}
+.blink{animation:blink 4s infinite}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
+.bob{animation:bob 1s steps(1) infinite}
+@keyframes wave{0%,100%{transform:rotate(-10deg)}50%{transform:rotate(12deg)}}
+.wave{transform-origin:50% 100%;animation:wave .7s steps(1) infinite}
+@keyframes rise{0%{transform:translateY(0);opacity:0}20%{opacity:1}100%{transform:translateY(-6px);opacity:0}}
+.steam{animation:rise 2.2s steps(6) infinite}
+.steam2{animation:rise 2.2s steps(6) infinite 1.1s}
+.smoke{animation:rise 1.6s steps(5) infinite}
+.smoke2{animation:rise 1.6s steps(5) infinite .8s}
+@keyframes zz{0%{transform:translate(0,0);opacity:0}30%{opacity:1}100%{transform:translate(4px,-7px);opacity:0}}
+.zz{animation:zz 2.6s steps(6) infinite}
+.zz2{animation:zz 2.6s steps(6) infinite 1.3s}
+@keyframes nod{0%,100%{transform:translateY(0)}50%{transform:translateY(1px)}}
+.nod{animation:nod 3s steps(1) infinite}
+@keyframes flicker{0%,44%,56%,100%{opacity:1}50%{opacity:.3}}
+.flicker{animation:flicker 1.1s steps(1) infinite}
+@keyframes code{0%{transform:scaleX(.15)}100%{transform:scaleX(1)}}
+.code{transform-origin:0 50%;animation:code 1.5s steps(6) infinite}
+.code2{transform-origin:0 50%;animation:code 1.5s steps(6) infinite .5s}
+@media (prefers-reduced-motion: reduce){.sprite *{animation:none!important}}
+</style>
+</helmet>
+<div style="width: 1200px; height: 780px; box-sizing: border-box; padding: 36px 40px; background: #0B111C; color: #E8EDF4; font-family: 'BIZ UDPGothic', 'Hiragino Sans', 'Yu Gothic', sans-serif; display: flex; flex-direction: column; gap: 24px">
+<div>
+<h1 style="margin: 0; font-family: 'DotGothic16', monospace; font-size: 26px; font-weight: 400; letter-spacing: 0.06em">キャラクターの状態一覧</h1>
+<p style="margin: 6px 0 0; font-size: 13px; color: #9DA9BB">フックイベントから決まる状態と、机の上の様子の対応。モニターの色は状態の色と同じ</p>
+</div>
+<div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px">
+<sc-for list="{{cells}}" as="d" hint-placeholder-count="8">
+<div style="display: flex; flex-direction: column; background: #131B2A; border: 1px solid #263247; border-radius: 12px; overflow: hidden">
+<div style="display: flex; justify-content: center; padding: 14px 0 6px; background: repeating-conic-gradient(#273044 0% 25%, #222A3B 0% 50%) 0 0 / 24px 24px">
+
+<div class="sprite" style="position: relative; width: 144px; height: 144px">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="2" y="36" width="44" height="2" fill="#000000" opacity="0.3"></rect>
+<rect x="14" y="8" width="12" height="13" fill="#3A4358"></rect>
+<rect x="14" y="8" width="12" height="1" fill="#4D5873"></rect>
+</svg>
+<sc-if value="{{d.hasHelper}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<g class="bob">
+<rect x="4" y="9" width="8" height="11" fill="{{d.helperBody}}"></rect>
+<rect x="5" y="3" width="6" height="6" fill="#F2C9A0"></rect>
+<rect x="5" y="2" width="6" height="2" fill="{{d.helperCap}}"></rect>
+<rect x="10" y="3" width="2" height="1" fill="{{d.helperCap}}"></rect>
+<rect x="9" y="5" width="1" height="1" fill="#1B1F2A"></rect>
+<rect x="10" y="11" width="3" height="5" fill="#E8EDF4"></rect>
+<rect x="11" y="10" width="1" height="1" fill="#9DA9BB"></rect>
+<rect x="10" y="13" width="2" height="1" fill="#9DA9BB"></rect>
+</g>
+</svg>
+</sc-if>
+<sc-if value="{{d.isRun}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="15" y="11" width="10" height="10" fill="{{d.shirt}}"></rect>
+<rect x="18" y="11" width="4" height="1" fill="#E8EDF4" opacity="0.5"></rect>
+<rect x="16" y="3" width="8" height="8" fill="#F2C9A0"></rect>
+<rect x="16" y="2" width="8" height="3" fill="{{d.hair}}"></rect>
+<rect x="16" y="5" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="23" y="5" width="1" height="2" fill="{{d.hair}}"></rect>
+<g class="blink"><rect x="19" y="7" width="1" height="1" fill="#1B1F2A"></rect><rect x="22" y="7" width="1" height="1" fill="#1B1F2A"></rect></g>
+</svg>
+</sc-if>
+<sc-if value="{{d.isPerm}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="15" y="11" width="10" height="10" fill="{{d.shirt}}"></rect>
+<rect x="16" y="3" width="8" height="8" fill="#F2C9A0"></rect>
+<rect x="16" y="2" width="8" height="3" fill="{{d.hair}}"></rect>
+<rect x="16" y="5" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="23" y="5" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="18" y="7" width="1" height="1" fill="#1B1F2A"></rect>
+<rect x="21" y="7" width="1" height="1" fill="#1B1F2A"></rect>
+<rect x="19" y="9" width="2" height="1" fill="#B5523B"></rect>
+<g class="wave"><rect x="25" y="-1" width="2" height="2" fill="#F2C9A0"></rect><rect x="25" y="1" width="2" height="11" fill="{{d.shirt}}"></rect></g>
+</svg>
+</sc-if>
+<sc-if value="{{d.isIdle}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="15" y="11" width="10" height="10" fill="{{d.shirt}}"></rect>
+<rect x="16" y="3" width="8" height="8" fill="#F2C9A0"></rect>
+<rect x="16" y="2" width="8" height="3" fill="{{d.hair}}"></rect>
+<rect x="16" y="5" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="23" y="5" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="18" y="7" width="2" height="1" fill="#1B1F2A"></rect>
+<rect x="21" y="7" width="2" height="1" fill="#1B1F2A"></rect>
+<rect x="19" y="9" width="2" height="1" fill="#B5523B"></rect>
+<rect x="13" y="13" width="2" height="5" fill="{{d.shirt}}"></rect>
+<rect x="10" y="12" width="3" height="4" fill="#E8EDF4"></rect>
+<rect x="9" y="13" width="1" height="2" fill="#E8EDF4"></rect>
+<rect x="10" y="12" width="3" height="1" fill="#6B3E26"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isErr}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="15" y="15" width="10" height="6" fill="{{d.shirt}}"></rect>
+<rect x="15" y="15" width="1" height="2" fill="#F2C9A0"></rect>
+<rect x="24" y="15" width="1" height="2" fill="#F2C9A0"></rect>
+<rect x="16" y="12" width="8" height="8" fill="{{d.hair}}"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isSleep}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="15" y="12" width="10" height="9" fill="{{d.shirt}}"></rect>
+<g class="nod">
+<rect x="17" y="5" width="8" height="8" fill="#F2C9A0"></rect>
+<rect x="17" y="4" width="8" height="3" fill="{{d.hair}}"></rect>
+<rect x="24" y="7" width="1" height="3" fill="{{d.hair}}"></rect>
+<rect x="18" y="9" width="2" height="1" fill="#1B1F2A"></rect>
+<rect x="21" y="9" width="2" height="1" fill="#1B1F2A"></rect>
+</g>
+</svg>
+</sc-if>
+
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="28" y="6" width="16" height="11" fill="#1E2433"></rect>
+<rect x="29" y="7" width="14" height="9" fill="{{d.screen}}" class="{{d.screenClass}}"></rect>
+<rect x="35" y="17" width="2" height="3" fill="#1E2433"></rect>
+<rect x="32" y="19" width="8" height="1" fill="#1E2433"></rect>
+<rect x="1" y="20" width="46" height="4" fill="#B07A4F"></rect>
+<rect x="1" y="20" width="46" height="1" fill="#C99063"></rect>
+<rect x="2" y="24" width="44" height="12" fill="#7A4E33"></rect>
+<rect x="2" y="35" width="44" height="1" fill="#5E3B26"></rect>
+<rect x="31" y="27" width="12" height="1" fill="#5E3B26"></rect>
+<rect x="31" y="31" width="12" height="1" fill="#5E3B26"></rect>
+<rect x="36" y="29" width="2" height="1" fill="#C99063"></rect>
+<rect x="36" y="33" width="2" height="1" fill="#C99063"></rect>
+<rect x="13" y="19" width="11" height="2" fill="#C8CFDB"></rect>
+<rect x="14" y="19" width="9" height="1" fill="#9DA9BB"></rect>
+</svg>
+
+<sc-if value="{{d.isRun}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="30" y="9" width="9" height="1" fill="#0B111C" opacity="0.45" class="code"></rect>
+<rect x="30" y="11" width="11" height="1" fill="#0B111C" opacity="0.45" class="code2"></rect>
+<rect x="32" y="13" width="6" height="1" fill="#0B111C" opacity="0.45" class="code"></rect>
+<rect x="14" y="18" width="3" height="2" fill="#F2C9A0" class="tapA"></rect>
+<rect x="20" y="18" width="3" height="2" fill="#F2C9A0" class="tapB"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isPerm}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<g class="bob">
+<rect x="3" y="-7" width="10" height="10" fill="#F5C451"></rect>
+<rect x="11" y="2" width="2" height="2" fill="#F5C451"></rect>
+<rect x="13" y="3" width="1" height="1" fill="#F5C451"></rect>
+<rect x="7" y="-5" width="2" height="4" fill="#0B111C"></rect>
+<rect x="7" y="0" width="2" height="1" fill="#0B111C"></rect>
+</g>
+<rect x="15" y="18" width="3" height="2" fill="#F2C9A0"></rect>
+<rect x="31" y="10" width="10" height="3" fill="#0B111C" opacity="0.35"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isIdle}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="10" y="9" width="1" height="2" fill="#9DA9BB" class="steam"></rect>
+<rect x="12" y="8" width="1" height="2" fill="#9DA9BB" class="steam2"></rect>
+<rect x="20" y="18" width="3" height="2" fill="#F2C9A0"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isErr}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<rect x="12" y="18" width="6" height="2" fill="{{d.shirt}}"></rect>
+<rect x="22" y="18" width="6" height="2" fill="{{d.shirt}}"></rect>
+<rect x="38" y="2" width="3" height="3" fill="#6B7486" class="smoke"></rect>
+<rect x="34" y="1" width="2" height="2" fill="#8892A4" class="smoke2"></rect>
+<rect x="34" y="9" width="4" height="4" fill="#0B111C" opacity="0.5"></rect>
+</svg>
+</sc-if>
+<sc-if value="{{d.isSleep}}" hint-placeholder-val="{{ false }}">
+<svg width="144" height="144" viewBox="0 -8 48 48" shape-rendering="crispEdges" aria-hidden="true" style="position: absolute; left: 0; top: 0; overflow: visible">
+<text x="25" y="3" font-family="'DotGothic16', monospace" font-size="7" fill="#B7C1D0" class="zz">Z</text>
+<text x="21" y="0" font-family="'DotGothic16', monospace" font-size="5" fill="#B7C1D0" class="zz2">z</text>
+</svg>
+</sc-if>
+</div>
+
+</div>
+<div style="padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; align-items: center; gap: 8px">
+<sc-if value="{{d.shapeCircle}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="6" fill="#43C57F"></circle></svg></sc-if>
+<sc-if value="{{d.shapeTri}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><polygon points="7,1 13,13 1,13" fill="#F5C451"></polygon></svg></sc-if>
+<sc-if value="{{d.shapeSq}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><rect x="1.5" y="1.5" width="11" height="11" fill="#F06A43"></rect></svg></sc-if>
+<sc-if value="{{d.shapeOff}}" hint-placeholder-val="{{ false }}"><svg width="12" height="12" viewBox="0 0 14 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="none" stroke="#6B7486" stroke-width="2"></circle></svg></sc-if>
+<span style="font-family: 'DotGothic16', monospace; font-size: 16px">{{d.title}}</span>
+</div>
+<div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #7FD3E4">{{d.event}}</div>
+<div style="font-size: 12px; color: #B7C1D0; line-height: 1.55">{{d.desc}}</div>
+</div>
+</div>
+</sc-for>
+</div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1200,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const KIND = {
+      run:   { screen: '#43C57F', shape: 'circle' },
+      perm:  { screen: '#F5C451', shape: 'tri' },
+      idle:  { screen: '#2E6E7E', shape: 'tri' },
+      err:   { screen: '#F06A43', shape: 'sq' },
+      sleep: { screen: '#2A3346', shape: 'sq' },
+      ended: { screen: '#141B28', shape: 'off' },
+    };
+    const HELPER = {
+      claude: { body: '#D97757', cap: '#F2E4D3' },
+      codex:  { body: '#E8EDF4', cap: '#1B1F2A' },
+    };
+    const raw = [
+      { kind: 'run', title: '作業中', event: 'PreToolUse / PostToolUse', desc: 'キーボードを叩き、画面にコードが流れる', shirt: '#5B7FD6', hair: '#3A2A22' },
+      { kind: 'perm', title: '許可待ち', event: 'PermissionRequest', desc: '手を挙げて「!」の吹き出し。机ごと黄色く光る', shirt: '#C2577A', hair: '#1B1F2A' },
+      { kind: 'idle', title: '指示待ち', event: 'Stop', desc: '目を細めてコーヒーで一服', shirt: '#4FA36A', hair: '#8A5A3B' },
+      { kind: 'err', title: 'API エラー', event: 'StopFailure', desc: '机に突っ伏し、モニターから煙。画面が明滅', shirt: '#D08A3C', hair: '#2A2A2A' },
+      { kind: 'sleep', title: '応答なし（推定）', event: '15 分イベントなし', desc: '舟をこいで Zzz', shirt: '#3C9C9C', hair: '#C9A15A' },
+      { kind: 'ended', title: '退勤', event: 'SessionEnd', desc: '空席。モニターも消灯', shirt: '#5B7FD6', hair: '#3A2A22' },
+      { kind: 'run', helper: 'claude', title: 'サブエージェント同行', event: 'Agent ツール', desc: 'オレンジの服の部下が書類を持って横に立つ', shirt: '#8C6BD1', hair: '#5A3A2A' },
+      { kind: 'run', helper: 'codex', title: 'Codex CLI 同行', event: 'codex コマンド', desc: '白い服と黒い帽子の外注さんが横に立つ', shirt: '#B8506A', hair: '#1B1F2A' },
+    ];
+    const cells = raw.map((d) => {
+      const k = KIND[d.kind];
+      const h = d.helper ? HELPER[d.helper] : null;
+      return {
+        ...d,
+        isRun: d.kind === 'run', isPerm: d.kind === 'perm', isIdle: d.kind === 'idle',
+        isErr: d.kind === 'err', isSleep: d.kind === 'sleep',
+        hasHelper: !!h,
+        helperBody: h ? h.body : '', helperCap: h ? h.cap : '',
+        screen: k.screen,
+        screenClass: d.kind === 'err' ? 'flicker' : '',
+        shapeCircle: k.shape === 'circle', shapeTri: k.shape === 'tri', shapeSq: k.shape === 'sq', shapeOff: k.shape === 'off',
+      };
+    });
+    return { cells };
+  }
+}
+</script>
+</body>
+</html>
