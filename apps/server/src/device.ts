@@ -1,5 +1,6 @@
 // フェーズ5：物理表示灯（M5Stack Atom Matrix、USB シリアル）へ、いちばん重い状態と利用枠の残りを送る。
-// ネットワークには何も公開しない。送るのは「S <状態> <5時間枠の残り%> <週間枠の残り%>」の1行だけ（不明な残りは -）。
+// ネットワークには何も公開しない。送るのは「S <状態> <5時間枠の残り%> <週間枠の残り%>」の1行だけ
+// （不明な残りは -、24時間より古い値は頭に ~ を付ける）。
 // つなぎ先は設定（device.serialPath）、なければ /dev/cu.usbserial-* が1つだけあるときに自動で使う。
 // Atom は 45 秒間何も届かないと「途切れた」表示にするので、変化がなくても 10 秒ごとに送り直す
 
@@ -16,20 +17,21 @@ export function deviceLevel(s: StateSnapshot): DeviceLevel {
 }
 
 /**
- * 表示灯に送る1行。利用枠はいちばん新しい値（24時間以内）の残り。
- * その値に枠がない、またはリセット時刻を過ぎていれば、新しい枠はまだ始まっていないので残り 100。値がまったくなければ -
+ * 表示灯に送る1行。利用枠はいちばん新しい値の残り。
+ * その値に枠がない、またはリセット時刻を過ぎていれば、新しい枠はまだ始まっていないので残り 100。値がまったくなければ -。
+ * 値が24時間より古ければ（ターミナルの Claude Code を使わず statusLine が届かない間）、表示灯が暗く表示できるよう頭に ~ を付ける
  */
 export function deviceLine(s: StateSnapshot, now = new Date()): string {
-  const fresh = s.usage
-    .filter((u) => now.getTime() - Date.parse(u.takenAt) < 24 * 3600_000)
-    .sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt))[0];
+  const latest = [...s.usage].sort((a, b) => Date.parse(b.takenAt) - Date.parse(a.takenAt))[0];
+  const mark = latest && now.getTime() - Date.parse(latest.takenAt) >= 24 * 3600_000 ? "~" : "";
   const remain = (w: { usedPct: number; resetsAt: string | null } | null | undefined) =>
-    !fresh
+    !latest
       ? "-"
-      : !w || (w.resetsAt && Date.parse(w.resetsAt) < now.getTime())
-        ? "100"
-        : String(Math.round(Math.max(0, Math.min(100, 100 - w.usedPct))));
-  return `S ${deviceLevel(s)} ${remain(fresh?.fiveHour)} ${remain(fresh?.sevenDay)}`;
+      : mark +
+        (!w || (w.resetsAt && Date.parse(w.resetsAt) < now.getTime())
+          ? "100"
+          : String(Math.round(Math.max(0, Math.min(100, 100 - w.usedPct)))));
+  return `S ${deviceLevel(s)} ${remain(latest?.fiveHour)} ${remain(latest?.sevenDay)}`;
 }
 
 function findPort(configured: string | undefined): string | null {
