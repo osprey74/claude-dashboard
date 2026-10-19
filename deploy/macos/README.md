@@ -87,6 +87,8 @@ PC 側では、`bun run build:agent` で作った実行ファイル（`apps/agen
 
 setup は実行ファイルを `~/.kanseishitsu/bin/` に置き、hooks（11 イベント、`async: true`）と statusLine を登録します。statusLine が既に設定されている場合は上書きせず、警告だけを出します。
 
+v0.5.0 から、setup は利用枠の mod（statusLine が呼ばれない VS Code・Desktop のセッション向け）を `~/.kanseishitsu/plugins/` に置き、`extraKnownMarketplaces.kanseishitsu` と `enabledPlugins["kanseishitsu-usage@kanseishitsu"]` を登録します。新しく起動した Claude Code のセッションから有効になります。`/plugin` の Installed タブに `kanseishitsu-usage` が出ていれば読み込まれています。
+
 ## 確認用
 
 - `GET /api/debug/statusline`（ログイン後）：各 PC から最後に届いた statusLine の内容。`rate_limits` が届いているかの確認に使う

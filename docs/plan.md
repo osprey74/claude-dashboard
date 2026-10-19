@@ -38,6 +38,7 @@
   - 稼働中のプレイヤーは横に立つ同行者として描く（サブエージェントはオレンジの服、Codex CLI は白い服と黒い帽子）。2人以上いるときは机の下に人数を出す
   - 服と髪の色はセッション ID から決める。窓の外は18時〜6時は夜空。OS で動きを減らす設定にするとアニメーションを止める
 - **利用枠のアカウントの見分け**：同じアカウントの PC は、週間枠のリセット時刻で見分けます。5時間枠はリセットのあと値が届かず、見分けに使えないためです。
+- **VS Code・Desktop の利用枠（2026-10-19）**：statusLine は VS Code の拡張機能では呼ばれず、VS Code だけで作業した日は利用枠が届きませんでした（home-desktop で確認）。v0.5.0 のエージェントは、setup で利用枠の mod（Claude Code のプラグイン）を `~/.kanseishitsu/plugins` にローカルのマーケットプレイスとして置き、`settings.json` の `extraKnownMarketplaces`・`enabledPlugins` に登録します。mod は応答が終わるたびに `$.session.usage()` で利用枠とコンテキスト使用率を読み、`エージェント usage <base64 の JSON>` を起動します。エージェントは statusLine と同じ形にして `/api/ingest/statusline` へ送るため、サーバーは変えていません。mod の hooks は VS Code の拡張機能・Desktop でも動きます（[Mods overview](https://code.claude.com/docs/en/plugins/mods/overview)）。Mac Mini の `claude -p`（statusLine が呼ばれない）で、statusLine と同じ値が届くことを確認しました。VS Code での確認は未了です。費用（`cost.usd`）は statusLine の累計と同じ値か未確認のため送らず、消費内訳は今までどおり会話記録からの見積もりを使います。ターミナルでは statusLine と mod の両方から届きますが、同じ値は1分に1回だけ記録します
 
 ### 残っている作業と未決事項（2026-10-06 時点）
 
@@ -45,7 +46,7 @@
 | --- | --- |
 | フェーズ3（指示送信） | 組織の Owner による Channel の有効化と、ISMS 上の確認待ち |
 | Cowork の OTel 受信 | 組織の管理者による送信先の設定待ち |
-| エージェントの更新 | v0.4.4（mac-mini・sasao-pc-1・home-desktop は差し替え済み、2026-10-08）。sohshimacbook-air-1 は未接続 |
+| エージェントの更新 | v0.4.4（mac-mini・sasao-pc-1・home-desktop は差し替え済み、2026-10-08）。sohshimacbook-air-1 は未接続。v0.5.0（利用枠の mod）は未配布 |
 | SessionEnd が届かないセッション | VS Code のウィンドウを閉じた・電源を切ったときなど、SessionEnd が届かずセッションが残ることがある（home-desktop で確認、2026-10-06）。v0.4.3 のエージェントは hooks のたびに、その PC で動いているセッションの一覧（`~/.claude/sessions/<pid>.json` のうちプロセスが生きているもの）を送り、サーバーは一覧にない同じ PC のセッションを終了にする。その PC の次のイベントで消えるため、電源を切ったままなら2時間で一覧から外れる（2026-10-08 に12時間から変更。sasao-pc-1 で VS Code を終了したときにフォークしたセッションが残ったため）。v0.4.4 のエージェントは SessionEnd で終了を先に送り、トークン数の集計はそのあとに別のイベント（SessionUsage）で送る（終了時のフックが打ち切られても終了の知らせは届くように） |
 | データの保持期間 | 決定：15日（2026-10-06）。サーバーが起動時と6時間ごとに、15日より前のイベント・プロンプト・利用枠・費用・解消済みのアラートと、最後のイベントから15日たったセッションを消す。PC の登録・通知の購読・未対応のアラートは残す。日数はサーバーの設定（`retentionDays`）で変えられる |
 | 本番での確認 | 放置アラートは試験のみ（本番で10分の許可待ちは未確認）。Codex CLI は本物で確認済み（2026-10-06） |
@@ -161,7 +162,7 @@ Mac Mini は個人の Tailscale に参加させ、マシン共有で会社の Ta
 
 ### statusLine（モデル・利用枠・コンテキスト）
 
-statusLine スクリプトは、端末に1行を表示しつつ、受け取った JSON から model、context_window、rate_limits を Mac Mini へ送ります。利用枠はこの経路でしか取得できないため、全PCで同じスクリプトを使います。
+statusLine スクリプトは、端末に1行を表示しつつ、受け取った JSON から model、context_window、rate_limits を Mac Mini へ送ります。利用枠はこの経路でしか取得できないため、全PCで同じスクリプトを使います。**変更**：statusLine が呼ばれない VS Code・Desktop のセッションは、利用枠の mod から送ります（冒頭の「進捗と計画の変更」を参照）。
 
 ### 自作 Channel（指示の受信と心拍）
 

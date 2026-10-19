@@ -1,12 +1,14 @@
 // Claude 管制室 PC 側エージェント
 //   kanseishitsu-agent hook <イベント名>   hooks から呼ばれる
 //   kanseishitsu-agent statusline          statusLine から呼ばれる
+//   kanseishitsu-agent usage <base64>      利用枠の mod（VS Code・Desktop 向け）から呼ばれる
 //   kanseishitsu-agent guard               PreToolUse（同期）から呼ばれる危険操作の判定
 //   kanseishitsu-agent setup [--apply]     設定と Claude Code への登録
 
 import { guardCheck, redactDeep, type HookIngest, type StatuslineIngest } from "@kanseishitsu/shared";
 import { hostInfo, liveSessionIds, loadConfig, log, post, readStdinJson, remoteSessionId, truncateDeep } from "./common";
 import { setup } from "./setup";
+import { modUsagePayload } from "./mod";
 import { statuslinePayload, statusText } from "./statusline";
 import { modelFromTranscript } from "./transcript";
 import { sessionTokenUsage } from "./usage";
@@ -126,13 +128,28 @@ async function runStatusline(): Promise<void> {
   await post(cfg, "/api/ingest/statusline", body);
 }
 
+/** mod が $.session.usage() で読んだ利用枠を、statusLine と同じ受け口へ送る */
+async function runUsage(arg: string): Promise<void> {
+  const cfg = loadConfig();
+  const p = modUsagePayload(arg);
+  if (!cfg || !p) return;
+  const remote = remoteSessionId(p.session_id);
+  const body: StatuslineIngest = {
+    host: hostInfo(cfg),
+    payload: redactDeep(remote !== undefined ? { remote_session_id: remote, ...p } : p),
+    sentAt: new Date().toISOString(),
+  };
+  await post(cfg, "/api/ingest/statusline", body);
+}
+
 const [cmd, arg] = process.argv.slice(2);
 try {
   if (cmd === "hook") await runHook(arg ?? "");
   else if (cmd === "statusline") await runStatusline();
+  else if (cmd === "usage") await runUsage(arg ?? "");
   else if (cmd === "guard") await runGuard();
   else if (cmd === "setup") await setup(process.argv.slice(3));
-  else console.log("usage: kanseishitsu-agent hook <event> | statusline | setup [--apply]");
+  else console.log("usage: kanseishitsu-agent hook <event> | statusline | usage <base64> | setup [--apply]");
 } catch (e) {
   // hooks・statusLine から呼ばれたときは決して失敗させない
   log(`${cmd} error: ${e instanceof Error ? e.stack : String(e)}`);
