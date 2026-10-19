@@ -1,10 +1,11 @@
 #include <Arduino.h>
 // Claude 管制室 物理表示灯（M5Stack Atom Matrix）
 // Mac Mini のサーバーから USB シリアル（115200bps）で「S <状態> <5時間枠の残り%> <週間枠の残り%>」の1行を受け取る
-// （状態は err / wait / run / idle、残りが不明なら -）。
+// （状態は err / wait / run / idle、残りが不明なら -、24時間より古い値なら頭に ~）。
 //   異常（err）：25個すべて朱色で点滅。明るさはボタンの設定によらず最大（M5Stack 推奨の上限 20）
 //   それ以外  ：左2列＝5時間枠、右2列＝週間枠の残り。2列×5段の10個で、1個 10%（切り上げ）。下から積み上げる
 //               色は残り 50% 以上が緑、20% 以上が黄、それ未満が橙。残りが不明なら、その列の一番下を灰色で点ける
+//               古い値（~ 付き）は、同じグラフを暗く点ける
 //               中央の列の縦3個（2〜4段目）はセッションの状態（稼働中＝緑、入力待ち＝黄、なし＝消灯）
 // 45 秒間何も届かなければ、途切れた表示（左上の暗い青の点滅）にする。ボタンで明るさを3段階に切り替える。
 
@@ -23,6 +24,8 @@ enum State { OFFLINE, IDLE, RUN, WAIT, ERR };
 State state = OFFLINE;
 int fiveRemain = -1;  // -1 は不明
 int weekRemain = -1;
+bool fiveStale = false;  // 24時間より古い値
+bool weekStale = false;
 unsigned long lastMsg = 0;
 uint8_t level = 1;
 bool lastButton = HIGH;
@@ -36,8 +39,20 @@ uint32_t remainColor(int r) {
   return px.Color(0xe8, 0x89, 0x2b);
 }
 
+/** 暗くした色。今の明るさで掛けても 0 にならないよう、点いている色は下限を設ける */
+uint32_t dimColor(uint32_t c) {
+  uint8_t floor = (255 + LEVELS[level]) / LEVELS[level];
+  auto ch = [&](int shift) -> uint32_t {
+    uint8_t v = (c >> shift) & 0xff;
+    if (v == 0) return 0;
+    uint8_t d = v / 4 > floor ? v / 4 : floor;
+    return (uint32_t)(d < v ? d : v) << shift;
+  };
+  return ch(16) | ch(8) | ch(0);
+}
+
 /** 2列×5段の残りグラフ。左下から右下、その上の段……の順に点ける */
-void drawBar(int baseX, int remain) {
+void drawBar(int baseX, int remain, bool stale) {
   if (remain < 0) {
     setXY(baseX, 4, px.Color(0x50, 0x58, 0x68));
     return;
@@ -45,6 +60,7 @@ void drawBar(int baseX, int remain) {
   int dots = (remain + 9) / 10;  // 切り上げ。残り 0% で 0 個
   if (dots > 10) dots = 10;
   uint32_t c = remainColor(remain);
+  if (stale) c = dimColor(c);
   for (int k = 0; k < dots; k++) setXY(baseX + k % 2, 4 - k / 2, c);
 }
 
@@ -64,14 +80,16 @@ void render() {
     px.show();
     return;
   }
-  drawBar(0, fiveRemain);
-  drawBar(3, weekRemain);
+  drawBar(0, fiveRemain, fiveStale);
+  drawBar(3, weekRemain, weekStale);
   uint32_t sc = state == RUN ? px.Color(0x43, 0xc5, 0x7f) : state == WAIT ? px.Color(0xf5, 0xc4, 0x51) : 0;
   for (int y = 1; y <= 3; y++) setXY(2, y, sc);
   px.show();
 }
 
-int parseRemain(const String& s) {
+int parseRemain(String s, bool& stale) {
+  stale = s.startsWith("~");
+  if (stale) s = s.substring(1);
   if (s.length() == 0 || s == "-") return -1;
   int v = s.toInt();
   return v < 0 ? 0 : v > 100 ? 100 : v;
@@ -91,10 +109,12 @@ void handleLine(const String& s) {
   if (sp1 >= 0) {
     String nums = rest.substring(sp1 + 1);
     int sp2 = nums.indexOf(' ');
-    fiveRemain = parseRemain(sp2 < 0 ? nums : nums.substring(0, sp2));
-    weekRemain = sp2 < 0 ? -1 : parseRemain(nums.substring(sp2 + 1));
+    fiveRemain = parseRemain(sp2 < 0 ? nums : nums.substring(0, sp2), fiveStale);
+    weekRemain = sp2 < 0 ? -1 : parseRemain(nums.substring(sp2 + 1), weekStale);
+    if (sp2 < 0) weekStale = false;
   } else {
     fiveRemain = weekRemain = -1;
+    fiveStale = weekStale = false;
   }
   lastMsg = millis();
   Serial.println("OK " + rest);

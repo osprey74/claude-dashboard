@@ -3,9 +3,11 @@
 
 import { chmodSync, copyFileSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir, platform } from "node:os";
-import { basename, join } from "node:path";
+import { basename, dirname, join } from "node:path";
+import pkg from "../package.json";
 import { AGENT_DIR, CONFIG_PATH, loadConfig, type AgentConfig } from "./common";
 import { LAUNCHER_NAME, LAUNCHER_SH } from "./launcher";
+import { MARKETPLACE_NAME, modFiles, PLUGIN_ID } from "./mod";
 
 /** 登録するフックイベント。phase1.md の8種に、状態判定の精度を上げる3種（※）を加える */
 export const HOOK_EVENTS = [
@@ -29,6 +31,8 @@ const BIN_DIR = join(AGENT_DIR, "bin");
 const BIN_PATH = join(BIN_DIR, isWin ? "kanseishitsu-agent.exe" : "kanseishitsu-agent");
 /** macOS では hooks・statusLine から起動役（launcher.ts）を呼ぶ */
 const LAUNCHER_PATH = join(BIN_DIR, LAUNCHER_NAME);
+/** 利用枠の mod を置くローカルのマーケットプレイス（mod.ts） */
+const MARKETPLACE_DIR = join(AGENT_DIR, "plugins");
 
 /** 設定ファイルに書くパス。Windows でも Git Bash で壊れないよう / 区切りにする */
 const slashPath = (p: string) => p.replace(/\\/g, "/");
@@ -48,6 +52,8 @@ type MatcherGroup = { matcher?: string; hooks?: HookHandler[] };
 type Settings = {
   hooks?: Record<string, MatcherGroup[]>;
   statusLine?: { type?: string; command?: string; [k: string]: unknown };
+  extraKnownMarketplaces?: Record<string, { source?: Record<string, unknown>; [k: string]: unknown }>;
+  enabledPlugins?: Record<string, boolean>;
   [k: string]: unknown;
 };
 
@@ -68,12 +74,14 @@ export function desiredEntries(binPath: string) {
 
 /**
  * 既存の設定に追記した結果と、変更点の説明を返す。
- * legacyPaths（以前に登録した呼び出し先。macOS で起動役を挟む前の実行ファイルなど）の登録は、新しい呼び出し先に置き換える
+ * legacyPaths（以前に登録した呼び出し先。macOS で起動役を挟む前の実行ファイルなど）の登録は、新しい呼び出し先に置き換える。
+ * marketplaceDir を渡したときは、利用枠の mod のマーケットプレイスを登録して mod を有効にする
  */
 export function mergeSettings(
   current: Settings,
   binPath: string,
   legacyPaths: string[] = [],
+  marketplaceDir?: string,
 ): { next: Settings; changes: string[]; warnings: string[] } {
   const want = desiredEntries(binPath);
   const legacy = legacyPaths.map(slashPath).filter((p) => p !== want.cmd);
@@ -115,7 +123,32 @@ export function mergeSettings(
         `利用枠・モデルの送信には、現在のスクリプトから「${want.statusLine.command}」を呼ぶか、置き換えてください。`,
     );
   }
+  if (marketplaceDir) {
+    const path = slashPath(marketplaceDir);
+    const known = next.extraKnownMarketplaces?.[MARKETPLACE_NAME];
+    if (known?.source?.source !== "directory" || known.source.path !== path) {
+      next.extraKnownMarketplaces = { ...next.extraKnownMarketplaces, [MARKETPLACE_NAME]: { source: { source: "directory", path } } };
+      changes.push(`extraKnownMarketplaces.${MARKETPLACE_NAME} を設定: ${path}（利用枠の mod）`);
+    }
+    const enabled = next.enabledPlugins?.[PLUGIN_ID];
+    if (enabled === false) {
+      warnings.push(`利用枠の mod（${PLUGIN_ID}）は無効にされているため変更しません。VS Code・Desktop の利用枠を送るには有効にしてください。`);
+    } else if (enabled !== true) {
+      next.enabledPlugins = { ...next.enabledPlugins, [PLUGIN_ID]: true };
+      changes.push(`enabledPlugins に ${PLUGIN_ID} を追加（VS Code・Desktop のセッションの利用枠を送る）`);
+    }
+  }
   return { next, changes, warnings };
+}
+
+/** 利用枠の mod のマーケットプレイスを置く（既存のファイルは書き換える） */
+function writeMarketplace(agentCmd: string): void {
+  for (const [rel, content] of Object.entries(modFiles(agentCmd, pkg.version))) {
+    const p = join(MARKETPLACE_DIR, rel);
+    mkdirSync(dirname(p), { recursive: true });
+    writeFileSync(p, content);
+  }
+  console.log(`利用枠の mod を配置しました: ${MARKETPLACE_DIR}`);
 }
 
 export async function setup(argv: string[]): Promise<void> {
@@ -170,12 +203,13 @@ export async function setup(argv: string[]): Promise<void> {
       legacyPaths.push(BIN_PATH);
       binPath = LAUNCHER_PATH;
     }
+    writeMarketplace(slashPath(binPath));
   } else {
-    console.log("（開発モード：bun で実行中のため、実行ファイルの配置は行いません）");
+    console.log("（開発モード：bun で実行中のため、実行ファイルと利用枠の mod の配置は行いません）");
   }
 
   const current: Settings = existsSync(SETTINGS_PATH) ? JSON.parse(readFileSync(SETTINGS_PATH, "utf8")) : {};
-  const { next, changes, warnings } = mergeSettings(current, binPath, legacyPaths);
+  const { next, changes, warnings } = mergeSettings(current, binPath, legacyPaths, isCompiled() ? MARKETPLACE_DIR : undefined);
 
   console.log(`\n${SETTINGS_PATH} への変更内容:`);
   if (changes.length === 0) console.log("  （変更なし：登録済みです）");
@@ -185,7 +219,13 @@ export async function setup(argv: string[]): Promise<void> {
   if (!apply) {
     console.log("\n登録する内容（手動で追記する場合）:");
     const want = desiredEntries(binPath);
-    console.log(JSON.stringify({ hooks: want.hooks, statusLine: want.statusLine }, null, 2));
+    const mod = isCompiled()
+      ? {
+          extraKnownMarketplaces: { [MARKETPLACE_NAME]: { source: { source: "directory", path: slashPath(MARKETPLACE_DIR) } } },
+          enabledPlugins: { [PLUGIN_ID]: true },
+        }
+      : {};
+    console.log(JSON.stringify({ hooks: want.hooks, statusLine: want.statusLine, ...mod }, null, 2));
     console.log("\n自動で追記するには、内容を確認のうえ `setup --apply` を実行してください。");
     return;
   }

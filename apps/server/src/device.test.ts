@@ -36,4 +36,13 @@ describe("deviceLine", () => {
     expect(deviceLine(old as unknown as StateSnapshot, now)).toBe("S err 100 100");
     expect(deviceLine({ counts: { run: 0, wait: 0, err: 0 }, usage: [] } as unknown as StateSnapshot, now)).toBe("S idle - -");
   });
+  test("24時間より古い値は捨てずに ~ を付けて送る", () => {
+    const s = {
+      counts: { run: 0, wait: 0, err: 0 },
+      usage: [usage("2026-10-05T07:00:00Z", 30, "2026-10-05T09:00:00Z", 20)],
+    } as unknown as StateSnapshot;
+    // 5時間枠はリセット済みなので 100、週間枠は最後の値の残り
+    expect(deviceLine(s, now)).toBe("S idle ~100 ~80");
+    expect(deviceLine(s, new Date("2026-10-06T06:59:00Z"))).toBe("S idle 100 80");
+  });
 });

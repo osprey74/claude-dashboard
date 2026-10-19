@@ -248,7 +248,8 @@ function Footer() {
     <footer className="footer">
       PC 側エージェント：
       <a href="/downloads/kanseishitsu-agent-windows-x64.exe">Windows（x64）</a> ・
-      <a href="/downloads/kanseishitsu-agent-macos-arm64">macOS（arm64）</a>
+      <a href="/downloads/kanseishitsu-agent-macos-arm64">macOS（arm64）</a> ・
+      <a href="/agent-guide.html">使い方</a>
       <PushToggle />
       <form method="post" action="/logout" className="logout">
         <button type="submit">ログアウト</button>

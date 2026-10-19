@@ -94,6 +94,20 @@ describe.skipIf(process.platform === "win32")("起動役", () => {
     }
   });
 
+  test("usage：引数をエージェントに渡し、待たずに終わる", async () => {
+    const dir = setupDir(`echo "$@" > "$(dirname "$0")/got.txt"; sleep 3`);
+    try {
+      const r = await run(dir, ["usage", "eyJhIjoxfQ=="], "");
+      expect(r.code).toBe(0);
+      expect(r.ms).toBeLessThan(1000);
+      for (let i = 0; i < 60 && !existsSync(join(dir, "got.txt")); i++) await Bun.sleep(50);
+      await Bun.sleep(50);
+      expect(readFileSync(join(dir, "got.txt"), "utf8")).toBe("usage eyJhIjoxfQ==\n");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   test("guard：判定の結果を返す", async () => {
     const dir = setupDir(`cat >/dev/null; echo '{"hookSpecificOutput":{"permissionDecision":"ask"}}'; sleep 3`);
     try {
