@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0B111C">
+<title>エージェントの使い方</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDPGothic:wght@400;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  /* 画面本体（src/styles.css）と同じ色 */
+  :root {
+    color-scheme: dark;
+    --bg: #0b111c;
+    --panel: #131b2a;
+    --line: #263247;
+    --tile: #1a2436;
+    --text: #e8edf4;
+    --sub: #9da9bb;
+    --accent: #5bc0d6;
+    --wait: #f5c451;
+    --font: "BIZ UDPGothic", "Hiragino Sans", "Yu Gothic", sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 15px; line-height: 1.75; }
+  main { max-width: 760px; margin: 0 auto; padding: 24px 16px 48px; }
+  a { color: #7fd3e4; }
+  a:hover { color: #b5e8f2; }
+  h1 { font-size: 22px; margin: 8px 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 8px; color: var(--accent); }
+  h3 { font-size: 15px; margin: 20px 0 6px; }
+  .lead { color: var(--sub); margin: 0 0 20px; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 18px 18px 8px; margin-bottom: 16px; }
+  ol { padding-left: 1.4em; }
+  li { margin-bottom: 10px; }
+  pre { background: var(--tile); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; overflow-x: auto; font-family: var(--mono); font-size: 13px; line-height: 1.6; margin: 6px 0; }
+  code { font-family: var(--mono); font-size: 0.92em; }
+  .note { border-left: 3px solid var(--wait); padding: 4px 0 4px 12px; color: var(--sub); margin: 8px 0 14px; }
+  .sub { color: var(--sub); }
+</style>
+</head>
+<body>
+<main>
+  <a href="/">← 管制室へ戻る</a>
+  <h1>PC 側エージェントの使い方</h1>
+  <p class="lead">Claude Code を使う PC にエージェントを入れると、その PC のセッションが管制室に表示されます。</p>
+
+  <section>
+    <h2>準備：この PC 用のトークン</h2>
+    <p>Mac Mini でトークンを発行します（平文はこのときだけ表示されます）。</p>
+    <pre>bun apps/server/src/cli.ts add-host office-win</pre>
+  </section>
+
+  <section id="macos">
+    <h2>macOS（arm64）</h2>
+    <ol>
+      <li><a href="/downloads/kanseishitsu-agent-macos-arm64">kanseishitsu-agent-macos-arm64</a> をダウンロードします。</li>
+      <li>
+        ターミナルでダウンロード先へ移動し、実行権限を付けます。
+        <pre>cd ~/Downloads
+chmod +x kanseishitsu-agent-macos-arm64</pre>
+      </li>
+      <li>
+        ブラウザーでダウンロードしたファイルには隔離の印（<code>com.apple.quarantine</code>）が付き、そのままでは「開発元を検証できない」などと表示されて起動できません。印を外します。
+        <pre>xattr -d com.apple.quarantine kanseishitsu-agent-macos-arm64</pre>
+        <p class="sub">「No such xattr」と表示された場合は、印が付いていないためそのまま進めます。</p>
+      </li>
+      <li>
+        設定を行います。サーバーの URL・トークン・この PC の表示名を聞かれます。
+        <pre>./kanseishitsu-agent-macos-arm64 setup            # 設定ファイルの作成と、登録内容の表示のみ
+./kanseishitsu-agent-macos-arm64 setup --apply    # 内容を確認して ~/.claude/settings.json に追記</pre>
+      </li>
+    </ol>
+    <p class="note">setup は実行ファイルを <code>~/.kanseishitsu/bin/</code> にコピーして使います。ダウンロードしたファイルは、setup のあと削除してかまいません。</p>
+  </section>
+
+  <section id="windows">
+    <h2>Windows（x64）</h2>
+    <ol>
+      <li><a href="/downloads/kanseishitsu-agent-windows-x64.exe">kanseishitsu-agent-windows-x64.exe</a> をダウンロードします。</li>
+      <li>
+        PowerShell でダウンロード先へ移動し、設定を行います。
+        <pre>cd ~\Downloads
+.\kanseishitsu-agent-windows-x64.exe setup
+.\kanseishitsu-agent-windows-x64.exe setup --apply</pre>
+      </li>
+    </ol>
+    <p class="note">「Windows によって PC が保護されました」と表示された場合は、「詳細情報」→「実行」を選びます。PowerShell で <code>Unblock-File .\kanseishitsu-agent-windows-x64.exe</code> を実行してから起動する方法もあります。</p>
+  </section>
+
+  <section>
+    <h2>登録のあと</h2>
+    <ul>
+      <li>新しく起動した Claude Code のセッションから送信が始まります（起動済みのセッションは対象外です）。</li>
+      <li>statusLine が既に設定されている場合は上書きせず、警告だけを出します。</li>
+      <li><code>/plugin</code> の Installed タブに <code>kanseishitsu-usage</code> が出ていれば、VS Code・Desktop 向けの利用枠の mod も読み込まれています。</li>
+      <li>VS Code で使っていて、セッションは表示されるのに利用枠が届かないときは、Claude Code の拡張機能を最新版に更新してください。古い拡張機能では利用枠の mod が動かないことがあります。</li>
+    </ul>
+    <h3>更新するとき</h3>
+    <p>新しい実行ファイルをダウンロードし、同じ手順（macOS は実行権限と隔離の印の解除も）で <code>setup --apply</code> を実行します。前回の入力が既定値として表示されるため、Enter で進められます。</p>
+  </section>
+</main>
+</body>
+</html>
